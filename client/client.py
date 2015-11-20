@@ -4,6 +4,7 @@
 
 import socket
 import json
+import time
 
 class TcpClient:
     HOST = "localhost"
@@ -17,9 +18,9 @@ class TcpClient:
         self.jdata = {}
         self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.client.connect(self.ADDR)
-        self.send_ack_msg()
+        self.handshake()
 
-    def send_ack_msg(self):
+    def handshake(self):
         ack_msg ='{"action": "handshake", "agent": "MINET"}'
         self.send_json(ack_msg)
         if self.jdata.get("server") != "MIRO":
@@ -48,6 +49,7 @@ class TcpClient:
             print "Login fail, reason:", self.jdata.get("message")
 
     def start_query(self):
+
         while True:
             data = raw_input(">")
             if not data:
@@ -80,7 +82,11 @@ if __name__ == "__main__":
     # msg1 = {'src':'hello', 'dst':"bar"}
     # jmsg1 = json.dumps(msg1)
     client = TcpClient()
-    client.register('hhhh','hhhh','hhhh')
-    client.login('hhhh','hhhh')
+    #client.register('user111111','user111111','user111111')
+    client.login('user111111','user111111')
+    while 1:
+        client.handshake()
+        time.sleep(0.1)
+
     # client.send_json(jmsg1)
-    client.start_query()
+    # client.start_query()
