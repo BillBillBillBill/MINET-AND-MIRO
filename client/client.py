@@ -85,8 +85,9 @@ if __name__ == "__main__":
     #client.register('user111111','user111111','user111111')
     client.login('user111111','user111111')
     while 1:
-        client.handshake()
-        time.sleep(0.1)
+        client.send_json('{"action": "show_info"}')
+        #client.handshake()
+        time.sleep(1)
 
     # client.send_json(jmsg1)
     # client.start_query()

@@ -10,11 +10,12 @@ import functools
 import os, datetime
 from conn import r
 
+connections = []
 
 def authenticated(method):
     @functools.wraps(method)
     def wrapper(self, *args, **kwargs):
-        if not self.has_login():
+        if not self.isLogin:
             print "用户没有登录，操作失败"
             return {"code": "AUTH_NEED", "message": "You need to login first"}
         else:
@@ -23,6 +24,20 @@ def authenticated(method):
     return wrapper
 
 class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
+
+    def setup(self):
+        self.isLogin = False
+        self.user = None
+        connections.append(self)
+
+    def finish(self):
+        connections.remove(self)
+
+    def get_user(self):
+        return self.user
+
+    def get_all_user(self):
+        return [conn.get_user() for conn in connections]
 
     # 重载其基类BaseHTTPRequestHandler的成员函数handle_one_reques
     def handle_one_request(self):
@@ -65,13 +80,11 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
             self.close_connection = 1
             return
 
-    def has_login(self):
-        return hasattr(self, 'isLogin') and self.isLogin
 
     def handle(self):
         try:
             while 1:
-                if self.has_login():
+                if self.isLogin:
                     print "用户[{}]发来消息".format(self.user)
                 data = self.request.recv(1024)
                 try:
@@ -96,11 +109,15 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
             "handshake": self.handshake_handler,
             "register": self.register_handler,
             "login": self.login_handler,
+            "show_info": self.show_info
         }
         if action_type not in allow_action.keys():
-            return {"code": "UNKNOWN METHOD", "message": "The action is unknown"}
+            return {"code": "UNKNOWN_METHOD", "message": "The action is unknown"}
         else:
             return allow_action[action_type]()
+
+    def show_info(self):
+        return {"code": "CURRENT_THREADS", "message": "The current threads are {}, current users ars {}".format(connections, self.get_all_user())}
 
     def handshake_handler(self):
         if self.jdata.get("agent") == "MINET":
@@ -161,7 +178,7 @@ if __name__ == "__main__":
     
     SocketServer.TCPServer.allow_reuse_address = True
     server = ThreadedTCPServer(ADDR, ThreadedTCPRequestHandler)
-    ip, port = server.server_address
+    # ip, port = server.server_address
 
     # Start a thread with the server -- that thread will then start one
     # more thread for each request
@@ -170,7 +187,8 @@ if __name__ == "__main__":
     server_thread.daemon = True
     server_thread.start()
     # print "Server loop running in thread:", server_thread.name
-    print "等待连接"
+    #print "等待连接"
+
 
     # Activate the server; this will keep running until you
     # interrupt the program with Ctrl-C
