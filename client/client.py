@@ -48,6 +48,14 @@ class TcpClient:
         else:
             print "Login fail, reason:", self.jdata.get("message")
 
+    def broadcast(self, content=""):
+        broadcast_msg = '{"action": "broadcast", "content": "%s"}' % content
+        self.send_json(broadcast_msg)
+        if self.jdata.get("code") == "BROADCAST_SUCCESS":
+            print "Broadcast success"
+        else:
+            print "Broadcast fail, reason:", self.jdata.get("message")
+
     def start_query(self):
 
         while True:
@@ -59,6 +67,12 @@ class TcpClient:
             if not data:
                 break
             print data.decode('utf8')
+
+    def start_receive_msg(self):
+        while True:
+            data = self.client.recv(self.BUFSIZ)
+            print "收到信息：", data
+            time.sleep(0.5)
 
 
     def send_json(self, message):
@@ -73,7 +87,7 @@ class TcpClient:
 
 
     def __exit__(self):
-        self.client.send("EXIT")
+        #self.client.send("EXIT")
         self.client.close()
 
 if __name__ == "__main__":
@@ -83,11 +97,19 @@ if __name__ == "__main__":
     # jmsg1 = json.dumps(msg1)
     client = TcpClient()
     #client.register('user111111','user111111','user111111')
-    client.login('user111111','user111111')
-    while 1:
-        client.send_json('{"action": "show_info"}')
-        #client.handshake()
-        time.sleep(1)
+    #client.login('user111111','user111111')
+
+    # 测试发送广播
+    # client.broadcast("")
+    #client.broadcast("hehe")
+
+    # 测试接收信息
+    # client.start_receive_msg()
+
+    #
+    # while 1:
+    #     client.send_json('{"action": "show_info"}')
+    #     time.sleep(1)
 
     # client.send_json(jmsg1)
     # client.start_query()

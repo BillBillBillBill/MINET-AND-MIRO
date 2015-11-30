@@ -5,6 +5,7 @@
 1. 握手
 1. 注册
 1. 登录
+1. 广播消息
 
 
 ## 握手
@@ -76,3 +77,24 @@ password | string | 密码
 #### 异常示例
 
 {"code":"LOGIN_FAIL","message":"xxx"}
+
+## 广播消息
+
+##### 请求体
+
+参数名 | 类型 | 描述
+---|---|---
+action | string | 动作
+content | string | 消息内容
+
+#### 请求示例
+
+{"action": "broadcast", "content": "hehe"}
+
+#### 响应示例
+
+{"code": "BROADCAST_SUCCESS","message":""}
+
+#### 异常示例
+
+{"code":"BROADCAST_FAIL","message":"content length must > 0"}

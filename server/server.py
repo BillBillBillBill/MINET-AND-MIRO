@@ -7,7 +7,9 @@ import threading
 import SocketServer
 import json, types,string
 import functools
-import os, datetime
+import time
+import datetime
+import traceback
 from conn import r
 
 connections = []
@@ -25,9 +27,17 @@ def authenticated(method):
 
 class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
 
+
     def setup(self):
         self.isLogin = False
         self.user = None
+        self.allow_action = {
+            "handshake": self.handshake_handler,
+            "register": self.register_handler,
+            "login": self.login_handler,
+            "show_info": self.show_info,
+            "broadcast": self.broadcast_handler
+        }
         connections.append(self)
 
     def finish(self):
@@ -96,25 +106,20 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
                     response = json.dumps(response)
                     print "Receive json :%r"% (response)
                 except Exception as e:
-                    print "Error:{} / Receive data:{}".format(e.message, data)
+                    print "Error:{} / Receive data:{} / traceback:{}".format(e.message, data, traceback.format_exc())
                     response = '{"code":"JSON_REQUIRE","message":"Please send json format"}'
                 self.request.sendall(response)
         except Exception as e:
-            print e
+            print "Error:{} / traceback:{}".format(e.message, traceback.format_exc())
 
 
     def handle_action(self, action_type):
         print "Receive action:[%s]" % action_type
-        allow_action = {
-            "handshake": self.handshake_handler,
-            "register": self.register_handler,
-            "login": self.login_handler,
-            "show_info": self.show_info
-        }
-        if action_type not in allow_action.keys():
+
+        if action_type not in self.allow_action.keys():
             return {"code": "UNKNOWN_METHOD", "message": "The action is unknown"}
         else:
-            return allow_action[action_type]()
+            return self.allow_action[action_type]()
 
     def show_info(self):
         return {"code": "CURRENT_THREADS", "message": "The current threads are {}, current users ars {}".format(connections, self.get_all_user())}
@@ -139,7 +144,7 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
                 r.set("user:" + username +":nickname", nickname)
                 return {"code":"REGISTER_SUCCESS","message":"success"}
             except Exception, e:
-                print "Error:",e.message
+                print "Error:",e.message,traceback.format_exc()
                 return {"code":"SERVER_ERROR","message":"Server Error"}
 
     def login_handler(self):
@@ -160,8 +165,28 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
                 else:
                     return {"code":"LOGIN_FAIL","message":"Username and password not match"}
             except Exception, e:
-                print "Error:",e.message
+                print "Error:",e.message,traceback.format_exc()
                 return {"code":"SERVER_ERROR","message":"Server Error"}
+
+    @authenticated
+    def broadcast_handler(self):
+        content = self.jdata.get("content")
+        now_time = time.strftime('%Y/%m/%d %H:%M:%S',time.localtime(time.time()))
+        if not content:
+            return {"code":"BROADCAST_FAIL","message":"content length must > 0"}
+        broadcast_msg = {
+            "time": now_time,
+            "content": content,
+            "user": self.current_user,
+            "nickname": r.get("user:" + self.current_user +":nickname")
+        }
+        print "新消息：", broadcast_msg
+        # 向所有在线用户发送该消息
+        for conn in connections:
+            if conn.get_user() != self.user:
+                print "向{}发送消息".format(conn.get_user())
+                conn.request.sendall(json.dumps(broadcast_msg))
+        return {"code":"BROADCAST_SUCCESS","message":""}
 
 
 
