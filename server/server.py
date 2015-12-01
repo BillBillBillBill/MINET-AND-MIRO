@@ -77,13 +77,9 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
                 self.send_error(501, "Unsupported method (%r)" % self.command)
                 return
             method = getattr(self, mname)
-            print "before call do_Get"
             method()
-            #增加 debug info 及 wfile 判断是否已经 close
-            print "after call do_Get"
-            if not self.wfile.closed:
-                self.wfile.flush() #actually send the response if not already done.
-            print "after wfile.flush()"
+            #没有判断 wfile 是否已经 close 就直接调用 flush()
+            self.wfile.flush() #actually send the response if not already done.
         except socket.timeout, e:
             #a read or a write timed out.  Discard this connection
             self.log_error("Request timed out: %r", e)
@@ -94,9 +90,13 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
     def handle(self):
         try:
             while 1:
+                print connections
                 if self.isLogin:
                     print "用户[{}]发来消息".format(self.user)
                 data = self.request.recv(1024)
+                if not data:
+                    print "用户退出"
+                    break
                 try:
                     # 读取发来的json
                     self.jdata = json.loads(data)

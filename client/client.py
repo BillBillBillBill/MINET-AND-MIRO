@@ -18,7 +18,11 @@ class TcpClient:
         self.jdata = {}
         self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.client.connect(self.ADDR)
+        print self.client.getpeername()
+        print self.client.getsockname()
         self.handshake()
+        self.allow_action = ["handshake", "register", "login", "broadcast"]
+
 
     def handshake(self):
         ack_msg ='{"action": "handshake", "agent": "MINET"}'
@@ -59,16 +63,44 @@ class TcpClient:
     def start_query(self):
 
         while True:
-            data = raw_input(">")
-            if not data:
+            action = raw_input("action:")
+
+            if not action:
                 break
-            self.client.send(data.encode('utf8'))
-            data = self.client.recv(self.BUFSIZ)
-            if not data:
-                break
-            print data.decode('utf8')
+
+            if action not in self.allow_action:
+                print "action not allowed"
+                continue
+
+            if action == "broadcast":
+                content = raw_input("content:")
+                self.broadcast(content)
+
+            if action == "handshake":
+                self.handshake()
+
+            if action == "register":
+                username = raw_input("username:")
+                password = raw_input("password:")
+                nickname = raw_input("nickname:")
+                self.register(username, password, nickname)
+
+            if action == "login":
+                username = raw_input("username:")
+                password = raw_input("password:")
+                self.login(username, password)
+
+            # self.client.send(data.encode('utf8'))
+            # data = self.client.recv(self.BUFSIZ)
+            # if not data:
+            #     break
+            # print data.decode('utf8')
+
 
     def start_receive_msg(self):
+        """
+        仅用于测试
+        """
         while True:
             data = self.client.recv(self.BUFSIZ)
             print "收到信息：", data
@@ -86,24 +118,24 @@ class TcpClient:
             print e
 
 
-    def __exit__(self):
-        #self.client.send("EXIT")
+    def finish(self):
+        self.client.send("EXIT")
         self.client.close()
 
 if __name__ == "__main__":
-    # Port 0 means to select an arbitrary unused port
-
     # msg1 = {'src':'hello', 'dst':"bar"}
     # jmsg1 = json.dumps(msg1)
     client = TcpClient()
-    #client.register('user111111','user111111','user111111')
-    #client.login('user111111','user111111')
+    client.start_query()
 
-    # 测试发送广播
+    # client.register('user111111','user111111','user111111')
+    # client.login('user111111','user111111')
+    #
+    # # 测试发送广播
     # client.broadcast("")
-    #client.broadcast("hehe")
-
-    # 测试接收信息
+    # client.broadcast("hehe")
+    #
+    # # 测试接收信息
     # client.start_receive_msg()
 
     #
