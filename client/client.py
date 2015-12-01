@@ -21,7 +21,7 @@ class TcpClient:
         print self.client.getpeername()
         print self.client.getsockname()
         self.handshake()
-        self.allow_action = ["handshake", "register", "login", "broadcast"]
+        self.allow_action = ["handshake", "register", "login", "broadcast", "get_online_user"]
 
 
     def handshake(self):
@@ -60,6 +60,12 @@ class TcpClient:
         else:
             print "Broadcast fail, reason:", self.jdata.get("message")
 
+    def get_online_user(self):
+        get_msg = '{"action": "get_online_user"}'
+        self.send_json(get_msg)
+        if self.jdata.get("user"):
+            print self.jdata.get("user")
+
     def start_query(self):
 
         while True:
@@ -90,6 +96,8 @@ class TcpClient:
                 password = raw_input("password:")
                 self.login(username, password)
 
+            if action == "get_online_user":
+                self.get_online_user()
             # self.client.send(data.encode('utf8'))
             # data = self.client.recv(self.BUFSIZ)
             # if not data:

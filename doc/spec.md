@@ -6,7 +6,7 @@
 1. 注册
 1. 登录
 1. 广播消息
-
+1. 获取在线用户
 
 ## 握手
 
@@ -98,3 +98,23 @@ content | string | 消息内容
 #### 异常示例
 
 {"code":"BROADCAST_FAIL","message":"content length must > 0"}
+
+## 获取在线用户
+
+##### 请求体
+
+参数名 | 类型 | 描述
+---|---|---
+action | string | 动作
+
+#### 请求示例
+
+{"action": "get_online_user"}
+
+#### 响应示例
+
+{u'user': [u'userxxx']}
+
+#### 异常示例
+
+None

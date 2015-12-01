@@ -36,7 +36,8 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
             "register": self.register_handler,
             "login": self.login_handler,
             "show_info": self.show_info,
-            "broadcast": self.broadcast_handler
+            "broadcast": self.broadcast_handler,
+            "get_online_user": self.get_online_user_handler,
         }
         connections.append(self)
 
@@ -167,6 +168,14 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
             except Exception, e:
                 print "Error:",e.message,traceback.format_exc()
                 return {"code":"SERVER_ERROR","message":"Server Error"}
+
+    def get_online_user_handler(self):
+        users = []
+        for conn in connections:
+            if conn.get_user() != self.user:
+                users.append(conn.get_user())
+        print users
+        return {"user": users}
 
     @authenticated
     def broadcast_handler(self):
