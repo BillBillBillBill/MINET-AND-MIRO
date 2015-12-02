@@ -5,14 +5,14 @@
 import socket
 import threading
 import SocketServer
-import json, types,string
+import json
 import functools
 import time
-import datetime
 import traceback
 from conn import r
 
 connections = []
+
 
 def authenticated(method):
     @functools.wraps(method)
@@ -26,7 +26,6 @@ def authenticated(method):
     return wrapper
 
 class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
-
 
     def setup(self):
         self.isLogin = False
@@ -79,10 +78,10 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
                 return
             method = getattr(self, mname)
             method()
-            #没有判断 wfile 是否已经 close 就直接调用 flush()
+            # 没有判断 wfile 是否已经 close 就直接调用 flush()
             self.wfile.flush() #actually send the response if not already done.
         except socket.timeout, e:
-            #a read or a write timed out.  Discard this connection
+            # a read or a write timed out.  Discard this connection
             self.log_error("Request timed out: %r", e)
             self.close_connection = 1
             return
@@ -105,7 +104,7 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
                     # 根据请求由不同handler处理
                     response = self.handle_action(action_type)
                     response = json.dumps(response)
-                    print "Receive json :%r"% (response)
+                    print "Receive json :%r" % (response)
                 except Exception as e:
                     print "Error:{} / Receive data:{} / traceback:{}".format(e.message, data, traceback.format_exc())
                     response = '{"code":"JSON_REQUIRE","message":"Please send json format"}'
@@ -136,39 +135,39 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
         password = self.jdata.get("password")
         nickname = self.jdata.get("nickname")
         if not all([username, password, nickname]):
-            return {"code":"REGISTER_FAIL","message":"You need send username, password and nickname"}
+            return {"code": "REGISTER_FAIL", "message": "You need send username, password and nickname"}
         else:
             try:
-                if r.exists("user:" + username +":password"):
-                    return {"code":"REGISTER_FAIL","message":"Username is registered"}
-                r.set("user:" + username +":password", password)
-                r.set("user:" + username +":nickname", nickname)
-                return {"code":"REGISTER_SUCCESS","message":"success"}
+                if r.exists("user:" + username + ":password"):
+                    return {"code":"REGISTER_FAIL", "message": "Username is registered"}
+                r.set("user:" + username + ":password", password)
+                r.set("user:" + username + ":nickname", nickname)
+                return {"code": "REGISTER_SUCCESS", "message": "success"}
             except Exception, e:
                 print "Error:",e.message,traceback.format_exc()
-                return {"code":"SERVER_ERROR","message":"Server Error"}
+                return {"code": "SERVER_ERROR","message": "Server Error"}
 
     def login_handler(self):
         username = self.jdata.get("username")
         password = self.jdata.get("password")
         if not all([username, password]):
-            return {"code":"LOGIN_FAIL","message":"You need send username and password"}
+            return {"code": "LOGIN_FAIL", "message": "You need send username and password"}
         else:
             try:
-                if not r.exists("user:" + username +":password"):
-                    return {"code":"LOGIN_FAIL","message":"Username is not existed"}
-                if password == r.get("user:" + username +":password"):
+                if not r.exists("user:" + username + ":password"):
+                    return {"code": "LOGIN_FAIL", "message": "Username is not existed"}
+                if password == r.get("user:" + username + ":password"):
                     connections.append(self)
                     r.sadd("online_user", username)
                     self.user = username
                     self.isLogin = True
                     self.broadcast({"action": "login", "user": self.get_user(), "nickname": r.get("user:" + username +":nickname")})
-                    return {"code":"LOGIN_SUCCESS","message":"success"}
+                    return {"code": "LOGIN_SUCCESS", "message": "success"}
                 else:
-                    return {"code":"LOGIN_FAIL","message":"Username and password not match"}
+                    return {"code": "LOGIN_FAIL", "message": "Username and password not match"}
             except Exception, e:
-                print "Error:",e.message,traceback.format_exc()
-                return {"code":"SERVER_ERROR","message":"Server Error"}
+                print "Error:", e.message,traceback.format_exc()
+                return {"code": "SERVER_ERROR", "message": "Server Error"}
 
     @authenticated
     def logout_handler(self):
@@ -176,7 +175,7 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
         connections.remove(self)
         self.isLogin = False
         self.broadcast({"action": "logout", "user": self.get_user(), "nickname": r.get("user:" + self.get_user() +":nickname")})
-        return {"code":"LOGOUT_SUCCESS","message":"success"}
+        return {"code": "LOGOUT_SUCCESS", "message": "success"}
 
 
     def get_online_user_handler(self):
@@ -192,16 +191,16 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
         if not content:
             content = self.jdata.get("content")
         if not content:
-            return {"code":"BROADCAST_FAIL","message":"content length must > 0"}
-        now_time = time.strftime('%Y/%m/%d %H:%M:%S',time.localtime(time.time()))
+            return {"code": "BROADCAST_FAIL", "message": "content length must > 0"}
+        now_time = time.strftime('%Y/%m/%d %H:%M:%S', time.localtime(time.time()))
         broadcast_msg = {
             "time": now_time,
             "content": content,
             "user": self.user,
-            "nickname": r.get("user:" + self.user +":nickname")
+            "nickname": r.get("user:" + self.user + ":nickname")
         }
         self.broadcast(broadcast_msg)
-        return {"code":"BROADCAST_SUCCESS","message":""}
+        return {"code": "BROADCAST_SUCCESS", "message": ""}
 
     def broadcast(self, content=None):
         # 向所有在线用户发送该消息
@@ -209,8 +208,6 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
             if conn.get_user() != self.user:
                 print "向{}发送消息".format(conn.get_user())
                 conn.request.sendall(json.dumps(content))
-
-
 
            
 class ThreadedTCPServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
@@ -234,7 +231,7 @@ if __name__ == "__main__":
     server_thread.daemon = True
     server_thread.start()
     # print "Server loop running in thread:", server_thread.name
-    #print "等待连接"
+    # print "等待连接"
 
 
     # Activate the server; this will keep running until you

@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 # -*- coding:utf-8 -*-
-#
 
 import socket
 import json
 import time
+
 
 class TcpClient:
     HOST = "localhost"
@@ -23,9 +23,8 @@ class TcpClient:
         self.handshake()
         self.allow_action = ["handshake", "register", "login", "logout", "broadcast", "get_online_user"]
 
-
     def handshake(self):
-        ack_msg ='{"action": "handshake", "agent": "MINET"}'
+        ack_msg = '{"action": "handshake", "agent": "MINET"}'
         self.send_json(ack_msg)
         if self.jdata.get("server") != "MIRO":
             print "Server is not MIRO"
@@ -35,13 +34,13 @@ class TcpClient:
             print "Connect to MIRO"
 
     def register(self, username, password, nickname):
-        register_msg = '{"action": "register", "username": "%s", "password": "%s", "nickname": "%s"}' % (username, password, nickname)
+        register_msg = '{"action": "register", "username": "%s", "password": "%s", "nickname": "%s"}'\
+                       % (username, password, nickname)
         self.send_json(register_msg)
         if self.jdata.get("code") == "REGISTER_SUCCESS":
             print "Register success"
         else:
             print "Register fail, reason:", self.jdata.get("message")
-
 
     def login(self, username, password):
         register_msg = '{"action": "login", "username": "%s", "password": "%s"}' % (username, password)
@@ -59,7 +58,7 @@ class TcpClient:
         if self.jdata.get("code") == "LOGOUT_SUCCESS":
             print "Logout success"
         else:
-            print "Logout fail:",self.jdata.get("message")
+            print "Logout fail:", self.jdata.get("message")
 
     def broadcast(self, content=""):
         broadcast_msg = '{"action": "broadcast", "content": "%s"}' % content
@@ -116,7 +115,6 @@ class TcpClient:
             #     break
             # print data.decode('utf8')
 
-
     def start_receive_msg(self):
         """
         仅用于测试
@@ -125,7 +123,6 @@ class TcpClient:
             data = self.client.recv(self.BUFSIZ)
             print "收到信息：", data
             time.sleep(0.5)
-
 
     def send_json(self, message):
         try:
@@ -136,7 +133,6 @@ class TcpClient:
             print "Recv: ", self.jdata
         except Exception as e:
             print e
-
 
     def finish(self):
         self.client.send("EXIT")
