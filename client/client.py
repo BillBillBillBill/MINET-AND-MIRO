@@ -21,7 +21,7 @@ class TcpClient:
         print self.client.getpeername()
         print self.client.getsockname()
         self.handshake()
-        self.allow_action = ["handshake", "register", "login", "broadcast", "get_online_user"]
+        self.allow_action = ["handshake", "register", "login", "logout", "broadcast", "get_online_user"]
 
 
     def handshake(self):
@@ -51,6 +51,15 @@ class TcpClient:
             print "Login success"
         else:
             print "Login fail, reason:", self.jdata.get("message")
+
+    def logout(self):
+        logout_msg = '{"action": "logout"}'
+        self.send_json(logout_msg)
+        self.isLogin = False
+        if self.jdata.get("code") == "LOGOUT_SUCCESS":
+            print "Logout success"
+        else:
+            print "Logout fail:",self.jdata.get("message")
 
     def broadcast(self, content=""):
         broadcast_msg = '{"action": "broadcast", "content": "%s"}' % content
@@ -95,6 +104,9 @@ class TcpClient:
                 username = raw_input("username:")
                 password = raw_input("password:")
                 self.login(username, password)
+
+            if action == "logout":
+                self.logout()
 
             if action == "get_online_user":
                 self.get_online_user()

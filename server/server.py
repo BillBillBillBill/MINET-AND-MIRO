@@ -35,11 +35,11 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
             "handshake": self.handshake_handler,
             "register": self.register_handler,
             "login": self.login_handler,
+            "logout": self.logout_handler,
             "show_info": self.show_info,
             "broadcast": self.broadcast_handler,
             "get_online_user": self.get_online_user_handler,
         }
-        connections.append(self)
 
     def finish(self):
         connections.remove(self)
@@ -158,16 +158,26 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
                 if not r.exists("user:" + username +":password"):
                     return {"code":"LOGIN_FAIL","message":"Username is not existed"}
                 if password == r.get("user:" + username +":password"):
-                    self.current_user = username
+                    connections.append(self)
                     r.sadd("online_user", username)
                     self.user = username
                     self.isLogin = True
+                    self.broadcast({"action": "login", "user": self.get_user(), "nickname": r.get("user:" + username +":nickname")})
                     return {"code":"LOGIN_SUCCESS","message":"success"}
                 else:
                     return {"code":"LOGIN_FAIL","message":"Username and password not match"}
             except Exception, e:
                 print "Error:",e.message,traceback.format_exc()
                 return {"code":"SERVER_ERROR","message":"Server Error"}
+
+    @authenticated
+    def logout_handler(self):
+        r.srem("online_user", self.user)
+        connections.remove(self)
+        self.isLogin = False
+        self.broadcast({"action": "logout", "user": self.get_user(), "nickname": r.get("user:" + self.get_user() +":nickname")})
+        return {"code":"LOGOUT_SUCCESS","message":"success"}
+
 
     def get_online_user_handler(self):
         users = []
@@ -178,24 +188,27 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
         return {"user": users}
 
     @authenticated
-    def broadcast_handler(self):
-        content = self.jdata.get("content")
-        now_time = time.strftime('%Y/%m/%d %H:%M:%S',time.localtime(time.time()))
+    def broadcast_handler(self, content=None):
+        if not content:
+            content = self.jdata.get("content")
         if not content:
             return {"code":"BROADCAST_FAIL","message":"content length must > 0"}
+        now_time = time.strftime('%Y/%m/%d %H:%M:%S',time.localtime(time.time()))
         broadcast_msg = {
             "time": now_time,
             "content": content,
-            "user": self.current_user,
-            "nickname": r.get("user:" + self.current_user +":nickname")
+            "user": self.user,
+            "nickname": r.get("user:" + self.user +":nickname")
         }
-        print "新消息：", broadcast_msg
+        self.broadcast(broadcast_msg)
+        return {"code":"BROADCAST_SUCCESS","message":""}
+
+    def broadcast(self, content=None):
         # 向所有在线用户发送该消息
         for conn in connections:
             if conn.get_user() != self.user:
                 print "向{}发送消息".format(conn.get_user())
-                conn.request.sendall(json.dumps(broadcast_msg))
-        return {"code":"BROADCAST_SUCCESS","message":""}
+                conn.request.sendall(json.dumps(content))
 
 
 

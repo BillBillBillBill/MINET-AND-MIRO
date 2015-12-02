@@ -74,9 +74,31 @@ password | string | 密码
 
 {"code":"LOGIN_SUCCESS","message":"success"}
 
+向其他客户端广播一条{"action": "login", "username": "1", "password": "1"}
+
 #### 异常示例
 
 {"code":"LOGIN_FAIL","message":"xxx"}
+
+
+## 登出
+
+##### 请求体
+
+参数名 | 类型 | 描述
+---|---|---
+action | string | 动作
+
+#### 请求示例
+
+{"action": "logout"}
+
+#### 响应示例
+
+{"code":"LOGOUT_SUCCESS","message":"success"}
+
+向其他客户端广播一条{"action": "logout", "username": "1", "password": "1"}
+
 
 ## 广播消息
 
