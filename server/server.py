@@ -13,7 +13,7 @@ from conn import r
 
 connections = []
 
-
+# 检查用户是否登录
 def authenticated(method):
     @functools.wraps(method)
     def wrapper(self, *args, **kwargs):
@@ -86,7 +86,7 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
             self.close_connection = 1
             return
 
-
+    # 处理用户发来的消息
     def handle(self):
         try:
             while 1:
@@ -113,6 +113,7 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
             print "Error:{} / traceback:{}".format(e.message, traceback.format_exc())
 
 
+    # 根据不同action交给不同的handler处理
     def handle_action(self, action_type):
         print "Receive action:[%s]" % action_type
 
@@ -121,15 +122,19 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
         else:
             return self.allow_action[action_type]()
 
+
+    # 显示信息
     def show_info(self):
         return {"code": "CURRENT_THREADS", "message": "The current threads are {}, current users ars {}".format(connections, self.get_all_user())}
 
+    # 握手
     def handshake_handler(self):
         if self.jdata.get("agent") == "MINET":
             return {"server": "MIRO"}
         else:
             return {"code": "UNKNOWN_AGENT", "message": "Your agent is rejected."}
 
+    # 用户注册
     def register_handler(self):
         username = self.jdata.get("username")
         password = self.jdata.get("password")
@@ -147,6 +152,7 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
                 print "Error:",e.message,traceback.format_exc()
                 return {"code": "SERVER_ERROR","message": "Server Error"}
 
+    # 用户登录
     def login_handler(self):
         username = self.jdata.get("username")
         password = self.jdata.get("password")
@@ -169,6 +175,7 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
                 print "Error:", e.message,traceback.format_exc()
                 return {"code": "SERVER_ERROR", "message": "Server Error"}
 
+    # 用户登出
     @authenticated
     def logout_handler(self):
         r.srem("online_user", self.user)
@@ -177,7 +184,7 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
         self.broadcast({"action": "logout", "user": self.get_user(), "nickname": r.get("user:" + self.get_user() +":nickname")})
         return {"code": "LOGOUT_SUCCESS", "message": "success"}
 
-
+    # 获取在线用户
     def get_online_user_handler(self):
         users = []
         for conn in connections:
@@ -186,6 +193,7 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
         print users
         return {"user": users}
 
+    # 处理广播事件
     @authenticated
     def broadcast_handler(self, content=None):
         if not content:
@@ -202,6 +210,7 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
         self.broadcast(broadcast_msg)
         return {"code": "BROADCAST_SUCCESS", "message": ""}
 
+    # 进行广播
     def broadcast(self, content=None):
         # 向所有在线用户发送该消息
         for conn in connections:
@@ -222,7 +231,6 @@ if __name__ == "__main__":
     
     SocketServer.TCPServer.allow_reuse_address = True
     server = ThreadedTCPServer(ADDR, ThreadedTCPRequestHandler)
-    # ip, port = server.server_address
 
     # Start a thread with the server -- that thread will then start one
     # more thread for each request
@@ -230,10 +238,6 @@ if __name__ == "__main__":
     # Exit the server thread when the main thread terminates
     server_thread.daemon = True
     server_thread.start()
-    # print "Server loop running in thread:", server_thread.name
-    # print "等待连接"
-
-
     # Activate the server; this will keep running until you
     # interrupt the program with Ctrl-C
     server.serve_forever()
