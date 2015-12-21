@@ -3,6 +3,8 @@ import re
 import platform
 from os import (walk, sep, system)
 from os.path import (join, splitext, exists)
+
+from PyQt5.QtGui import QKeyEvent
 from PyQt5.QtWidgets import (
     QApplication, QMessageBox, QFileDialog, QWidget,
     QLabel, QLineEdit, QTextEdit, QRadioButton, QToolButton, QPushButton, QTextBrowser,
@@ -30,7 +32,7 @@ class MainWindow(QWidget):
 
         # 窗口标题
         self.title_fram = QLabel()
-        self.title = QLabel('MI')
+        self.title = QLabel('MINET')
         self.title.setAlignment(Qt.AlignCenter)
         self.title_fram.setFixedHeight(100)
 
@@ -61,7 +63,7 @@ class MainWindow(QWidget):
 
 
         # 布局
-        # window title
+        # 标题部分
         self.__layout_title = QHBoxLayout()
         self.__layout_title.addWidget(self.title)
         self.title_fram.setLayout(self.__layout_title)
@@ -212,10 +214,10 @@ class MainWindow(QWidget):
         self.login_btn.setShortcut(Qt.Key_Return)
 
         # 关联 信号/槽
-        # self.__pbn_file_path.clicked.connect(self.choose_path)
         self.login_btn.clicked.connect(self.login)
         self.register_btn.clicked.connect(self.register)
         self.send_msg_btn.clicked.connect(self.send_msg)
+        self.chat_msg_edit.textChanged.connect(self.detect_return)
 
         # 线程间共享数据队列
         queue_size = 10000
@@ -228,6 +230,13 @@ class MainWindow(QWidget):
         self.chat_widget.hide()
         # self.chat_layout_widgets = [self.tabView, self.chat_msg_edit, self.send_msg_btn]
         # self.login_layout_widgets = [self.login_btn_fram, self.login_input_fram]
+
+    # 检测回车，检测到就发送
+    def detect_return(self):
+        content = self.chat_msg_edit.toPlainText()
+        print "%r" % content
+        if content.endswith('\n'):
+            self.send_msg_btn.click()
 
 
     def login(self):
