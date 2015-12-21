@@ -3,15 +3,17 @@ import re
 import platform
 from os import (walk, sep, system)
 from os.path import (join, splitext, exists)
-from PyQt5.QtWidgets import (QApplication, QMessageBox, QFileDialog, QWidget,
-                             QLabel, QLineEdit, QRadioButton, QToolButton, QPushButton, QTextBrowser,
-			     QButtonGroup, QFrame, QListWidget, QListWidgetItem, QListWidget, QListWidgetItem, QTabWidget,
-                             QHBoxLayout, QVBoxLayout, QGridLayout)
+from PyQt5.QtWidgets import (
+    QApplication, QMessageBox, QFileDialog, QWidget,
+    QLabel, QLineEdit, QTextEdit, QRadioButton, QToolButton, QPushButton, QTextBrowser,
+	QButtonGroup, QFrame, QListWidget, QListWidgetItem, QTabWidget,
+    QHBoxLayout, QVBoxLayout, QGridLayout)
 
-from PyQt5.QtCore import (Qt, QTimer)
+from PyQt5.QtCore import (Qt, QTimer, QTranslator)
 from threading import Thread
 from Queue import Queue
 from time import sleep
+from datetime import datetime
 
 
 class MainWindow(QWidget):
@@ -19,14 +21,14 @@ class MainWindow(QWidget):
         super(MainWindow, self).__init__(parent)
 #        self.setWindowFlags(Qt.Window | Qt.FramelessWindowHint)
 #        self.setAttribute(Qt.WA_TranslucentBackground)
-        self.resize(900, 300)
+        self.resize(500, 300)
 
         # self.__pbn_switch_view = None
 
         # 创建窗口部件
         self.widget_frame = QLabel()
 
-        # window title
+        # 窗口标题
         self.title_fram = QLabel()
         self.title = QLabel('MI')
         self.title.setAlignment(Qt.AlignCenter)
@@ -44,23 +46,20 @@ class MainWindow(QWidget):
         self.register_btn = QPushButton('注册')
         self.login_btn.setFixedWidth(100)
         self.register_btn.setFixedWidth(100)
-        # for w in [self.username_lab, self.password_lab, self.username_edit, self.password_edit]:
-        #     w.setFixedWidth(35)
-        #     w.setContentsMargins(60, 0, 60, 0)
-            #w.setFixedHeight(100)
 
-        # 显示详细部分
+        # 显示详细聊天部分
         self.tabView = QTabWidget()
-        self.group_chat = QListWidget()
+        self.group_chat = QTextBrowser()
         self.P2P_chat = QTextBrowser()
         self.tabView.addTab(self.group_chat, '群聊')
         self.tabView.addTab(self.P2P_chat, 'P2P聊天')
 
-        # lines
-        '''
-        self.__line_1 = QFrame()
-        self.__line_1.setFrameStyle(QFrame.HLine | QFrame.Sunken)
-        '''
+        self.chat_msg_edit = QTextEdit()
+        self.send_msg_btn = QPushButton('发送')
+        self.chat_msg_edit.setMaximumHeight(80)
+        self.chat_msg_edit.setPlaceholderText("有什么想说的？")
+
+
         # 布局
         # window title
         self.__layout_title = QHBoxLayout()
@@ -75,7 +74,6 @@ class MainWindow(QWidget):
         self.login_input_layout.addWidget(self.password_edit, 1, 1, 1, 3);
         self.login_input_layout.setContentsMargins(0, 0, 0, 0)
 
-
         self.login_btn_layout = QHBoxLayout()
         self.login_btn_layout.addWidget(self.login_btn)
         self.login_btn_layout.addWidget(self.register_btn)
@@ -85,13 +83,31 @@ class MainWindow(QWidget):
         self.login_input_fram.setLayout(self.login_input_layout)
         self.login_btn_fram.setLayout(self.login_btn_layout)
 
-        # top layout
+
+        # 登录部分widget
+        self.login_layout = QVBoxLayout()
+        self.login_layout.addWidget(self.login_input_fram)
+        self.login_layout.addWidget(self.login_btn_fram)
+
+        self.login_widget = QLabel()
+        self.login_widget.setLayout(self.login_layout)
+
+        # 聊天部分widget
+        self.chat_layout = QVBoxLayout()
+        self.chat_layout.addWidget(self.tabView)
+        self.chat_layout.addWidget(self.chat_msg_edit)
+        self.chat_layout.addWidget(self.send_msg_btn)
+
+        self.chat_widget = QLabel()
+        self.chat_widget.setLayout(self.chat_layout)
+
+        # 顶部层
         self.top_layout = QVBoxLayout()
         self.top_layout.addWidget(self.title_fram)
-        self.top_layout.addWidget(self.login_input_fram)
-        self.top_layout.addWidget(self.login_btn_fram)
-        self.top_layout.addWidget(self.tabView)
+        self.top_layout.addWidget(self.login_widget)
+        self.top_layout.addWidget(self.chat_widget)
         self.top_layout.setSpacing(10)
+
         self.widget_frame.setLayout(self.top_layout)
 
         self.layout_fram = QGridLayout()
@@ -100,17 +116,18 @@ class MainWindow(QWidget):
         self.setLayout(self.layout_fram)
 
         # set object name
-        self.widget_frame.setObjectName('fram')
-        self.title.setObjectName('lab_title')
+        self.widget_frame.setObjectName('frame')
+        self.title.setObjectName('title')
         self.tabView.setObjectName('tabView')
-        self.group_chat.setObjectName('browser_result')
-        self.P2P_chat.setObjectName('browser_error')
+        self.group_chat.setObjectName('group_chat')
+        self.P2P_chat.setObjectName('P2P_chat')
+        self.chat_msg_edit.setObjectName('chat_msg_edit')
 
         self.setStyleSheet(
-            '#fram{'
+            '#frame{'
                 'border-image: url(Images/bg);'
             '}'
-            '#lab_title{'
+            '#title{'
                 'color: white;'
                 'font-size: 20pt;'
             '}'
@@ -154,9 +171,16 @@ class MainWindow(QWidget):
                 'border: 1px solid rgba(255, 255, 255, 200);'
                 'background: rgba(0, 0, 0, 80);'
             '}'
-            '#browser_result, #browser_error{'
+            '#group_chat, #P2P_chat{'
                 'background: rgba(0, 0, 0, 0);'
+                'color: white;'
                 'border: 0;'
+            '}'
+            '#chat_msg_edit{'
+                'background: rgba(0, 0, 0, 40);'
+                'border: 1px solid rgba(220, 220, 220, 200);'
+                'color: white;'
+                'height: 10px;'
             '}'
             'QLineEdit{'
                 'background: rgba(0, 0, 0, 40);'
@@ -191,6 +215,7 @@ class MainWindow(QWidget):
         # self.__pbn_file_path.clicked.connect(self.choose_path)
         self.login_btn.clicked.connect(self.login)
         self.register_btn.clicked.connect(self.register)
+        self.send_msg_btn.clicked.connect(self.send_msg)
 
         # 线程间共享数据队列
         queue_size = 10000
@@ -200,7 +225,9 @@ class MainWindow(QWidget):
         # 强制结束子线程
         self.__thread_killer = False
 
-        self.tabView.hide()
+        self.chat_widget.hide()
+        # self.chat_layout_widgets = [self.tabView, self.chat_msg_edit, self.send_msg_btn]
+        # self.login_layout_widgets = [self.login_btn_fram, self.login_input_fram]
 
 
     def login(self):
@@ -211,14 +238,13 @@ class MainWindow(QWidget):
             "提示",
             "登录成功！",
             QMessageBox.Yes)
-        if self.tabView.isHidden():
-            self.login_input_fram.hide()
-            self.login_btn_fram.hide()
-            self.tabView.show()
-            self.resize(900, 900)
+        if self.chat_widget.isHidden():
+            self.login_widget.hide()
+            self.chat_widget.show()
+            self.resize(1000, 800)
         else:
-            self.tabView.hide()
-            self.resize(900, 300)
+            self.chat_widget.hide()
+            self.resize(500, 300)
 
 
     def register(self):
@@ -229,11 +255,28 @@ class MainWindow(QWidget):
             QMessageBox.Yes)
 
 
+    def send_msg(self):
+
+        currentWidgetName = self.tabView.currentWidget().objectName()
+        content = self.chat_msg_edit.toPlainText()
+        time = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+        self.chat_msg_edit.clear()
+        if currentWidgetName == 'group_chat':
+            self.group_chat.setText("%s%s\n%s\n"%(self.group_chat.toPlainText(), time, content))
+            self.group_chat.moveCursor(self.group_chat.textCursor().End)
+        else:
+            self.P2P_chat.setText("%s%s\n%s\n"%(self.P2P_chat.toPlainText(), time, content))
+            self.P2P_chat.moveCursor(self.P2P_chat.textCursor().End)
+
+
+
 # 程序入口
 if __name__ == '__main__':
     import sys
+    translator = QTranslator()
+    translator.load('/home/bill/Qt5.5.1/5.5/gcc_64/translations/qt_zh_CN.qm')
     app = QApplication(sys.argv)
+    app.installTranslator(translator)
     main_window = MainWindow()
     main_window.show()
-    #main_window.set_open_tool()
     sys.exit(app.exec_())
