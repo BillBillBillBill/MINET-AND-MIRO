@@ -19,7 +19,7 @@ class MainWindow(QWidget):
         super(MainWindow, self).__init__(parent)
 #        self.setWindowFlags(Qt.Window | Qt.FramelessWindowHint)
 #        self.setAttribute(Qt.WA_TranslucentBackground)
-        self.resize(900, 900)
+        self.resize(900, 300)
 
         # self.__pbn_switch_view = None
 
@@ -189,8 +189,8 @@ class MainWindow(QWidget):
 
         # 关联 信号/槽
         # self.__pbn_file_path.clicked.connect(self.choose_path)
-        self.login_btn.clicked.connect(self.fuck)
-        self.register_btn.clicked.connect(self.fuck)
+        self.login_btn.clicked.connect(self.login)
+        self.register_btn.clicked.connect(self.register)
 
         # 线程间共享数据队列
         queue_size = 10000
@@ -200,13 +200,33 @@ class MainWindow(QWidget):
         # 强制结束子线程
         self.__thread_killer = False
 
+        self.tabView.hide()
 
-    def fuck(self):
-        print "fuck"
+
+    def login(self):
+        print "username:"+self.username_edit.text()
+        print "password:"+self.password_edit.text()
+        QMessageBox.information(
+            self,
+            "提示",
+            "登录成功！",
+            QMessageBox.Yes)
         if self.tabView.isHidden():
+            self.login_input_fram.hide()
+            self.login_btn_fram.hide()
             self.tabView.show()
+            self.resize(900, 900)
         else:
             self.tabView.hide()
+            self.resize(900, 300)
+
+
+    def register(self):
+        QMessageBox.information(
+            self,
+            "提示",
+            "注册完成！",
+            QMessageBox.Yes)
 
 
 # 程序入口
