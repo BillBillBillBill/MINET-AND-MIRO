@@ -16,7 +16,7 @@ from threading import Thread
 from Queue import Queue
 from time import sleep
 from datetime import datetime
-
+from client import TcpClient
 
 class MainWindow(QWidget):
     def __init__(self, parent=None):
@@ -42,8 +42,12 @@ class MainWindow(QWidget):
         self.login_input_fram = QLabel()
         self.username_lab = QLabel("用户名：")
         self.password_lab = QLabel("密码：")
+        self.nickname_lab = QLabel("昵称：")
         self.username_edit = QLineEdit()
         self.password_edit = QLineEdit()
+        self.nickname_edit = QLineEdit()
+        self.type_select_login = QRadioButton('登录')
+        self.type_select_register = QRadioButton('注册')
         self.login_btn = QPushButton('登录')
         self.register_btn = QPushButton('注册')
         self.login_btn.setFixedWidth(100)
@@ -72,8 +76,12 @@ class MainWindow(QWidget):
         self.login_input_layout = QGridLayout()
         self.login_input_layout.addWidget(self.username_lab, 0, 0, 1, 1)
         self.login_input_layout.addWidget(self.password_lab, 1, 0, 1, 1)
+        self.login_input_layout.addWidget(self.nickname_lab, 2, 0, 1, 1)
         self.login_input_layout.addWidget(self.username_edit, 0, 1, 1, 3);
         self.login_input_layout.addWidget(self.password_edit, 1, 1, 1, 3);
+        self.login_input_layout.addWidget(self.nickname_edit, 2, 1, 1, 3);
+        self.login_input_layout.addWidget(self.type_select_login, 3, 1, 1, 2);
+        self.login_input_layout.addWidget(self.type_select_register, 3, 2, 1, 2);
         self.login_input_layout.setContentsMargins(0, 0, 0, 0)
 
         self.login_btn_layout = QHBoxLayout()
@@ -124,8 +132,14 @@ class MainWindow(QWidget):
         self.group_chat.setObjectName('group_chat')
         self.P2P_chat.setObjectName('P2P_chat')
         self.chat_msg_edit.setObjectName('chat_msg_edit')
+        self.username_lab.setObjectName('username_lab')
+        self.password_lab.setObjectName('password_lab')
+        self.nickname_lab.setObjectName('nickname_lab')
 
         self.setStyleSheet(
+            '#username_lab, #password_lab, #nickname_lab{'
+                'color: white;'
+            '}'
             '#frame{'
                 'border-image: url(Images/bg);'
             '}'
@@ -184,6 +198,10 @@ class MainWindow(QWidget):
                 'color: white;'
                 'height: 10px;'
             '}'
+            'QRadioButton{'
+                'background: rgba(0, 0, 0, 0);'
+                'color: white;'
+            '}'
             'QLineEdit{'
                 'background: rgba(0, 0, 0, 40);'
                 'border: 1px solid rgba(220, 220, 220, 200);'
@@ -218,6 +236,8 @@ class MainWindow(QWidget):
         self.register_btn.clicked.connect(self.register)
         self.send_msg_btn.clicked.connect(self.send_msg)
         self.chat_msg_edit.textChanged.connect(self.detect_return)
+        self.type_select_register.toggled.connect(self.toggle_register)
+        self.type_select_login.toggled.connect(self.toggle_login)
 
         # 线程间共享数据队列
         queue_size = 10000
@@ -228,40 +248,84 @@ class MainWindow(QWidget):
         self.__thread_killer = False
 
         self.chat_widget.hide()
+        self.type_select_login.click()
         # self.chat_layout_widgets = [self.tabView, self.chat_msg_edit, self.send_msg_btn]
         # self.login_layout_widgets = [self.login_btn_fram, self.login_input_fram]
+
+        self.client = TcpClient(self)
 
     # 检测回车，检测到就发送
     def detect_return(self):
         content = self.chat_msg_edit.toPlainText()
-        print "%r" % content
+        # print "%r" % content
         if content.endswith('\n'):
             self.send_msg_btn.click()
 
+    #　切换到注册页
+    def toggle_register(self):
+        self.login_btn.hide()
+        self.register_btn.show()
+        self.nickname_lab.show()
+        self.nickname_edit.show()
+
+    #　切换到登录页
+    def toggle_login(self):
+        self.login_btn.show()
+        self.register_btn.hide()
+        self.nickname_lab.hide()
+        self.nickname_edit.hide()
 
     def login(self):
-        print "username:"+self.username_edit.text()
-        print "password:"+self.password_edit.text()
-        QMessageBox.information(
-            self,
-            "提示",
-            "登录成功！",
-            QMessageBox.Yes)
-        if self.chat_widget.isHidden():
-            self.login_widget.hide()
-            self.chat_widget.show()
-            self.resize(1000, 800)
-        else:
-            self.chat_widget.hide()
-            self.resize(500, 300)
+        username = self.username_edit.text()
+        password = self.password_edit.text()
+        print "username:"+username
+        print "password:"+password
+        try:
+            assert self.client.login(username, password)
+            QMessageBox.information(
+                self,
+                "提示",
+                "登录成功！",
+                QMessageBox.Yes)
+            if self.chat_widget.isHidden():
+                self.login_widget.hide()
+                self.chat_widget.show()
+                self.resize(1000, 800)
+            else:
+                self.chat_widget.hide()
+                self.resize(500, 300)
+        except Exception, e:
+            print e
+            QMessageBox.warning(
+                self,
+                "提示",
+                "登录失败！",
+                QMessageBox.Yes)
 
 
     def register(self):
-        QMessageBox.information(
-            self,
-            "提示",
-            "注册完成！",
-            QMessageBox.Yes)
+        username = self.username_edit.text()
+        password = self.password_edit.text()
+        nickname = self.nickname_edit.text()
+        print "username:"+username
+        print "password:"+password
+        print "nickname:"+nickname
+        try:
+            assert self.client.register(username, password, nickname)
+            QMessageBox.information(
+                self,
+                "提示",
+                "注册完成！",
+                QMessageBox.Yes)
+            # 转到登录页
+            self.type_select_login.click()
+        except Exception, e:
+            print e
+            QMessageBox.warning(
+                self,
+                "提示",
+                "注册失败！",
+                QMessageBox.Yes)
 
 
     def send_msg(self):
@@ -270,12 +334,25 @@ class MainWindow(QWidget):
         content = self.chat_msg_edit.toPlainText()
         time = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
         self.chat_msg_edit.clear()
+        print "%r" % content
         if currentWidgetName == 'group_chat':
-            self.group_chat.setText("%s%s\n%s\n"%(self.group_chat.toPlainText(), time, content))
-            self.group_chat.moveCursor(self.group_chat.textCursor().End)
+            try:
+                assert self.client.broadcast(content)
+                self.group_chat.setText("%s%s\n%s\n"%(self.group_chat.toPlainText(), time, content))
+                self.group_chat.moveCursor(self.group_chat.textCursor().End)
+            except Exception, e:
+                print e
+                QMessageBox.warning(
+                    self,
+                    "提示",
+                    "发送失败！",
+                    QMessageBox.Yes)
         else:
             self.P2P_chat.setText("%s%s\n%s\n"%(self.P2P_chat.toPlainText(), time, content))
             self.P2P_chat.moveCursor(self.P2P_chat.textCursor().End)
+
+
+
 
 
 

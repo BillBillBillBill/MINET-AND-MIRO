@@ -12,9 +12,10 @@ class TcpClient:
     BUFSIZ = 1024
     ADDR = (HOST, PORT)
 
-    def __init__(self):
+    def __init__(self, UI=None):
         self.isMIRO = False
         self.isLogin = False
+        self.UI = UI
         self.jdata = {}
         self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.client.connect(self.ADDR)
@@ -39,8 +40,10 @@ class TcpClient:
         self.send_json(register_msg)
         if self.jdata.get("code") == "REGISTER_SUCCESS":
             print "Register success"
+            return True
         else:
             print "Register fail, reason:", self.jdata.get("message")
+            return False
 
     def login(self, username, password):
         register_msg = '{"action": "login", "username": "%s", "password": "%s"}' % (username, password)
@@ -48,8 +51,10 @@ class TcpClient:
         if self.jdata.get("code") == "LOGIN_SUCCESS":
             self.isLogin = True
             print "Login success"
+            return True
         else:
             print "Login fail, reason:", self.jdata.get("message")
+            return False
 
     def logout(self):
         logout_msg = '{"action": "logout"}'
@@ -64,9 +69,12 @@ class TcpClient:
         broadcast_msg = '{"action": "broadcast", "content": "%s"}' % content
         self.send_json(broadcast_msg)
         if self.jdata.get("code") == "BROADCAST_SUCCESS":
+            self.jdata = {"code":0}
             print "Broadcast success"
+            return True
         else:
             print "Broadcast fail, reason:", self.jdata.get("message")
+            return False
 
     def get_online_user(self):
         get_msg = '{"action": "get_online_user"}'
