@@ -1,8 +1,6 @@
-# _*_ coding: utf-8 _*_import re
+#coding:utf-8
 import re
 import platform
-from os import (walk, sep, system)
-from os.path import (join, splitext, exists)
 
 from PyQt5.QtGui import QKeyEvent
 from PyQt5.QtWidgets import (
@@ -11,21 +9,34 @@ from PyQt5.QtWidgets import (
 	QButtonGroup, QFrame, QListWidget, QListWidgetItem, QTabWidget,
     QHBoxLayout, QVBoxLayout, QGridLayout)
 
-from PyQt5.QtCore import (Qt, QTimer, QTranslator)
+from PyQt5.QtCore import *
 from threading import Thread
 from Queue import Queue
 from time import sleep
 from datetime import datetime
 from client import TcpClient
 
+
 class MainWindow(QWidget):
+    # 声明信号 不能放init中
+    add_format_text_to_group_chat_signal = pyqtSignal(dict)
+
+
+    def closeEvent(self, QCloseEvent):
+        print u"程序退出"
+        self.__thread_killer = True
+        self.client.finish()
+        print "关闭client"
+        self.recv_client.finish()
+        print "关闭recv_client"
+
+
+
     def __init__(self, parent=None):
         super(MainWindow, self).__init__(parent)
 #        self.setWindowFlags(Qt.Window | Qt.FramelessWindowHint)
 #        self.setAttribute(Qt.WA_TranslucentBackground)
         self.resize(500, 300)
-
-        # self.__pbn_switch_view = None
 
         # 创建窗口部件
         self.widget_frame = QLabel()
@@ -228,7 +239,6 @@ class MainWindow(QWidget):
             '}'
             )
 
-
         self.login_btn.setShortcut(Qt.Key_Return)
 
         # 关联 信号/槽
@@ -238,6 +248,9 @@ class MainWindow(QWidget):
         self.chat_msg_edit.textChanged.connect(self.detect_return)
         self.type_select_register.toggled.connect(self.toggle_register)
         self.type_select_login.toggled.connect(self.toggle_login)
+
+        # 绑定信号
+        self.add_format_text_to_group_chat_signal.connect(self.add_format_text_to_group_chat)
 
         # 线程间共享数据队列
         queue_size = 10000
@@ -253,6 +266,9 @@ class MainWindow(QWidget):
         # self.login_layout_widgets = [self.login_btn_fram, self.login_input_fram]
 
         self.client = TcpClient(self)
+        self.recv_client = TcpClient(self, is_recv_boardcast=True)
+        #self.start_recv_msg()
+
 
     # 检测回车，检测到就发送
     def detect_return(self):
@@ -261,12 +277,14 @@ class MainWindow(QWidget):
         if content.endswith('\n'):
             self.send_msg_btn.click()
 
+
     #　切换到注册页
     def toggle_register(self):
         self.login_btn.hide()
         self.register_btn.show()
         self.nickname_lab.show()
         self.nickname_edit.show()
+
 
     #　切换到登录页
     def toggle_login(self):
@@ -275,6 +293,7 @@ class MainWindow(QWidget):
         self.nickname_lab.hide()
         self.nickname_edit.hide()
 
+
     def login(self):
         username = self.username_edit.text()
         password = self.password_edit.text()
@@ -282,6 +301,7 @@ class MainWindow(QWidget):
         print "password:"+password
         try:
             assert self.client.login(username, password)
+            assert self.recv_client.login(username, password)
             QMessageBox.information(
                 self,
                 "提示",
@@ -294,6 +314,7 @@ class MainWindow(QWidget):
             else:
                 self.chat_widget.hide()
                 self.resize(500, 300)
+            self.start_recv_msg()
         except Exception, e:
             print e
             QMessageBox.warning(
@@ -328,32 +349,61 @@ class MainWindow(QWidget):
                 QMessageBox.Yes)
 
 
-    def send_msg(self):
-
-        currentWidgetName = self.tabView.currentWidget().objectName()
-        content = self.chat_msg_edit.toPlainText()
+    def add_format_text_to_group_chat(self, jdata):
         time = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+        text = jdata.get("content", "")
+        nickname = jdata.get("nickname", "")
+        msg = "%s %s\n%s\n" % (nickname, time, text)
+        self.group_chat.setText("%s%s"%(self.group_chat.toPlainText(), msg))
+        self.group_chat.moveCursor(self.group_chat.textCursor().End)
+
+
+    def add_format_text_to_P2P_chat(self, jdata):
+        time = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+        text = jdata.get("content", "")
+        nickname = jdata.get("nickname", "")
+        msg = "%s %s\n%s\n" % (nickname, time, text)
+        self.P2P_chat.setText("%s%s"%(self.group_chat.toPlainText(), msg))
+        self.P2P_chat.moveCursor(self.P2P_chat.textCursor().End)
+
+
+    def send_msg(self):
+        currentWidgetName = self.tabView.currentWidget().objectName()
+        raw_content = self.chat_msg_edit.toPlainText()
+        content = raw_content.replace('\n', '\\n')
         self.chat_msg_edit.clear()
-        print "%r" % content
+
         if currentWidgetName == 'group_chat':
             try:
                 assert self.client.broadcast(content)
-                self.group_chat.setText("%s%s\n%s\n"%(self.group_chat.toPlainText(), time, content))
-                self.group_chat.moveCursor(self.group_chat.textCursor().End)
+                jdata = {"content": raw_content, "nickname": u"自己"}
+                self.add_format_text_to_group_chat(jdata)
             except Exception, e:
-                print e
+                print "send_msg:", e
                 QMessageBox.warning(
                     self,
                     "提示",
                     "发送失败！",
                     QMessageBox.Yes)
         else:
-            self.P2P_chat.setText("%s%s\n%s\n"%(self.P2P_chat.toPlainText(), time, content))
-            self.P2P_chat.moveCursor(self.P2P_chat.textCursor().End)
+            jdata = {"content": raw_content, "nickname": u"自己"}
+            self.add_format_text_to_P2P_chat(jdata)
 
 
-
-
+    def start_recv_msg(self):
+        def start():
+            while True:
+                if self.__thread_killer:
+                    print "停止接收信息"
+                    return True
+                jdata = self.recv_client.receive_one_msg()
+                if jdata.keys() == ['content', 'nickname', 'user', 'time']:
+                    #self.add_format_text_to_group_chat(jdata['content'])
+                    self.add_format_text_to_group_chat_signal.emit(jdata)
+                    print jdata['nickname'], "发来消息：", jdata['content']
+        self.recv_msg_thread = Thread(target=start)
+        self.recv_msg_thread.start()
+        return True
 
 
 # 程序入口

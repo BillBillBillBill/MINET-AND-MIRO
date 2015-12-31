@@ -12,16 +12,17 @@ import traceback
 from conn import r
 
 connections = []
+recv_connections = []
 
 # 检查用户是否登录
 def authenticated(method):
     @functools.wraps(method)
     def wrapper(self, *args, **kwargs):
         if not self.isLogin:
-            print "用户没有登录，操作失败"
+            # print "用户没有登录，操作失败"
             return {"code": "AUTH_NEED", "message": "You need to login first"}
         else:
-            print "已登录 操作成功"
+            # print "已登录 操作成功"
             return method(self, *args, **kwargs)
     return wrapper
 
@@ -30,6 +31,7 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
     def setup(self):
         self.isLogin = False
         self.user = None
+        self.is_recv_boardcast = False
         self.allow_action = {
             "handshake": self.handshake_handler,
             "register": self.register_handler,
@@ -41,7 +43,10 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
         }
 
     def finish(self):
-        connections.remove(self)
+        if self in connections:
+            connections.remove(self)
+        if self in recv_connections:
+            recv_connections.remove(self)
 
     def get_user(self):
         return self.user
@@ -129,6 +134,8 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
 
     # 握手
     def handshake_handler(self):
+        if self.jdata.get("is_recv_boardcast", "") == "yes":
+            self.is_recv_boardcast = True
         if self.jdata.get("agent") == "MINET":
             return {"server": "MIRO"}
         else:
@@ -163,7 +170,10 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
                 if not r.exists("user:" + username + ":password"):
                     return {"code": "LOGIN_FAIL", "message": "Username is not existed"}
                 if password == r.get("user:" + username + ":password"):
-                    connections.append(self)
+                    if self.is_recv_boardcast:
+                        recv_connections.append(self)
+                    else:
+                        connections.append(self)
                     r.sadd("online_user", username)
                     self.user = username
                     self.isLogin = True
@@ -179,9 +189,11 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
     @authenticated
     def logout_handler(self):
         r.srem("online_user", self.user)
-        connections.remove(self)
         self.isLogin = False
-        self.broadcast({"action": "logout", "user": self.get_user(), "nickname": r.get("user:" + self.get_user() +":nickname")})
+        try:
+            self.broadcast({"action": "logout", "user": self.get_user(), "nickname": r.get("user:" + self.get_user() +":nickname")})
+        except Exception, e:
+            print e
         return {"code": "LOGOUT_SUCCESS", "message": "success"}
 
     # 获取在线用户
@@ -213,7 +225,7 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
     # 进行广播
     def broadcast(self, content=None):
         # 向所有在线用户发送该消息
-        for conn in connections:
+        for conn in recv_connections:
             if conn.get_user() != self.user:
                 print "向{}发送消息".format(conn.get_user())
                 conn.request.sendall(json.dumps(content))

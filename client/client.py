@@ -1,9 +1,10 @@
 #!/usr/bin/env python
-# -*- coding:utf-8 -*-
+#coding:utf-8
 
 import socket
 import json
 import time
+from threading import Thread
 
 
 class TcpClient:
@@ -12,10 +13,12 @@ class TcpClient:
     BUFSIZ = 1024
     ADDR = (HOST, PORT)
 
-    def __init__(self, UI=None):
+
+    def __init__(self, UI=None, is_recv_boardcast=False):
         self.isMIRO = False
         self.isLogin = False
         self.UI = UI
+        self.is_recv_boardcast = is_recv_boardcast
         self.jdata = {}
         self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.client.connect(self.ADDR)
@@ -24,9 +27,13 @@ class TcpClient:
         self.handshake()
         self.allow_action = ["handshake", "register", "login", "logout", "broadcast", "get_online_user"]
 
+
     def handshake(self):
-        ack_msg = '{"action": "handshake", "agent": "MINET"}'
-        self.send_json(ack_msg)
+        if self.is_recv_boardcast:
+            ack_msg = '{"action": "handshake", "agent": "MINET", "is_recv_boardcast": "yes"}'
+        else:
+            ack_msg = '{"action": "handshake", "agent": "MINET"}'
+        self.send_json_and_recv(ack_msg)
         if self.jdata.get("server") != "MIRO":
             print "Server is not MIRO"
             self.client.close()
@@ -34,10 +41,11 @@ class TcpClient:
             self.isMIRO = True
             print "Connect to MIRO"
 
+
     def register(self, username, password, nickname):
         register_msg = '{"action": "register", "username": "%s", "password": "%s", "nickname": "%s"}'\
                        % (username, password, nickname)
-        self.send_json(register_msg)
+        self.send_json_and_recv(register_msg)
         if self.jdata.get("code") == "REGISTER_SUCCESS":
             print "Register success"
             return True
@@ -45,9 +53,10 @@ class TcpClient:
             print "Register fail, reason:", self.jdata.get("message")
             return False
 
+
     def login(self, username, password):
         register_msg = '{"action": "login", "username": "%s", "password": "%s"}' % (username, password)
-        self.send_json(register_msg)
+        self.send_json_and_recv(register_msg)
         if self.jdata.get("code") == "LOGIN_SUCCESS":
             self.isLogin = True
             print "Login success"
@@ -56,31 +65,35 @@ class TcpClient:
             print "Login fail, reason:", self.jdata.get("message")
             return False
 
+
     def logout(self):
         logout_msg = '{"action": "logout"}'
-        self.send_json(logout_msg)
+        self.send_json_and_recv(logout_msg)
         self.isLogin = False
         if self.jdata.get("code") == "LOGOUT_SUCCESS":
             print "Logout success"
         else:
             print "Logout fail:", self.jdata.get("message")
 
+
     def broadcast(self, content=""):
         broadcast_msg = '{"action": "broadcast", "content": "%s"}' % content
-        self.send_json(broadcast_msg)
-        if self.jdata.get("code") == "BROADCAST_SUCCESS":
-            self.jdata = {"code":0}
+        try:
+            self.send_json(broadcast_msg)
             print "Broadcast success"
             return True
-        else:
+        except Exception, e:
+            print e
             print "Broadcast fail, reason:", self.jdata.get("message")
             return False
 
+
     def get_online_user(self):
         get_msg = '{"action": "get_online_user"}'
-        self.send_json(get_msg)
+        self.send_json_and_recv(get_msg)
         if self.jdata.get("user"):
             print self.jdata.get("user")
+
 
     def start_query(self):
 
@@ -123,16 +136,28 @@ class TcpClient:
             #     break
             # print data.decode('utf8')
 
-    def start_receive_msg(self):
+    def receive_one_msg(self):
         """
-        仅用于测试
+        接收一条信息 并返回
         """
-        while True:
-            data = self.client.recv(self.BUFSIZ)
-            print "收到信息：", data
-            time.sleep(0.5)
+        data = self.client.recv(self.BUFSIZ)
+        print "收到信息：", data
+        jdata = json.loads(data)
+        return jdata
+
 
     def send_json(self, message):
+        """
+        发送信息
+        """
+        try:
+            print u"Send: {}".format(message)
+            self.client.sendall(message.encode("utf-8"))
+        except Exception as e:
+            print "send_json:", e
+
+
+    def send_json_and_recv(self, message):
         try:
             print "Send: {}".format(message)
             self.client.sendall(message)
@@ -140,24 +165,27 @@ class TcpClient:
             self.jdata = json.loads(response)
             print "Recv: ", self.jdata
         except Exception as e:
-            print e
+            print "send_json_and_recv:", e
+
 
     def finish(self):
-        self.client.send("EXIT")
+        if self.isLogin and not self.is_recv_boardcast:
+            self.logout()
         self.client.close()
 
 if __name__ == "__main__":
     # msg1 = {'src':'hello', 'dst':"bar"}
     # jmsg1 = json.dumps(msg1)
     client = TcpClient()
-    client.start_query()
+    #client.start_query()
 
     # client.register('user111111','user111111','user111111')
-    # client.login('user111111','user111111')
+    client.login('1','1')
     #
     # # 测试发送广播
-    # client.broadcast("")
-    # client.broadcast("hehe")
+    client.broadcast("")
+    client.broadcast("hehe")
+    client.broadcast("hehehhhhh")
     #
     # # 测试接收信息
     # client.start_receive_msg()
