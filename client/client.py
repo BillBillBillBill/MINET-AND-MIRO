@@ -159,8 +159,8 @@ class TcpClient:
 
     def send_json_and_recv(self, message):
         try:
-            print "Send: {}".format(message)
-            self.client.sendall(message)
+            #  print "Send: {}".format(message)
+            self.client.sendall(message.encode("utf-8"))
             response = self.client.recv(self.BUFSIZ)
             self.jdata = json.loads(response)
             print "Recv: ", self.jdata

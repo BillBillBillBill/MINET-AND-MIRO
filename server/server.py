@@ -141,6 +141,7 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
         else:
             return {"code": "UNKNOWN_AGENT", "message": "Your agent is rejected."}
 
+
     # 用户注册
     def register_handler(self):
         username = self.jdata.get("username")
@@ -159,6 +160,7 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
                 print "Error:",e.message,traceback.format_exc()
                 return {"code": "SERVER_ERROR","message": "Server Error"}
 
+
     # 用户登录
     def login_handler(self):
         username = self.jdata.get("username")
@@ -174,10 +176,13 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
                         recv_connections.append(self)
                     else:
                         connections.append(self)
-                    r.sadd("online_user", username)
+
                     self.user = username
                     self.isLogin = True
-                    self.broadcast({"action": "login", "user": self.get_user(), "nickname": r.get("user:" + username +":nickname")})
+                    if not self.is_recv_boardcast:
+                        self.broadcast_login()
+                        r.sadd("online_user", username)
+                    #self.broadcast({"action": "login", "user": self.get_user(), "nickname": r.get("user:" + username +":nickname")})
                     return {"code": "LOGIN_SUCCESS", "message": "success"}
                 else:
                     return {"code": "LOGIN_FAIL", "message": "Username and password not match"}
@@ -185,16 +190,19 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
                 print "Error:", e.message,traceback.format_exc()
                 return {"code": "SERVER_ERROR", "message": "Server Error"}
 
+
     # 用户登出
     @authenticated
     def logout_handler(self):
-        r.srem("online_user", self.user)
-        self.isLogin = False
         try:
-            self.broadcast({"action": "logout", "user": self.get_user(), "nickname": r.get("user:" + self.get_user() +":nickname")})
+            self.broadcast_logout()
+            r.srem("online_user", self.user)
+            self.isLogin = False
+            # self.broadcast({"action": "logout", "user": self.get_user(), "nickname": r.get("user:" + self.get_user() +":nickname")})
         except Exception, e:
             print e
         return {"code": "LOGOUT_SUCCESS", "message": "success"}
+
 
     # 获取在线用户
     def get_online_user_handler(self):
@@ -204,6 +212,7 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
                 users.append(conn.get_user())
         print users
         return {"user": users}
+
 
     # 处理广播事件
     @authenticated
@@ -221,6 +230,28 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
         }
         self.broadcast(broadcast_msg)
         return {"code": "BROADCAST_SUCCESS", "message": ""}
+
+
+    def broadcast_login(self):
+        now_time = time.strftime('%Y/%m/%d %H:%M:%S', time.localtime(time.time()))
+        broadcast_msg = {
+            "time": now_time,
+            "content": u"用户%s进入聊天室\n" % r.get("user:" + self.user + ":nickname"),
+            "user": self.user,
+            "nickname": "【系统消息】"
+        }
+        self.broadcast(broadcast_msg)
+
+
+    def broadcast_logout(self):
+        now_time = time.strftime('%Y/%m/%d %H:%M:%S', time.localtime(time.time()))
+        broadcast_msg = {
+            "time": now_time,
+            "content": u"用户%s退出聊天室\n" % r.get("user:" + self.user + ":nickname"),
+            "user": self.user,
+            "nickname": "【系统消息】"
+        }
+        self.broadcast(broadcast_msg)
 
     # 进行广播
     def broadcast(self, content=None):
