@@ -154,8 +154,8 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
 
     # 握手
     def handshake_handler(self):
-        self.p2p_server_port = self.jdata.get("p2p_server_port", "")
-        self.p2p_server_host = self.jdata.get("p2p_server_host", "")
+        self.p2p_server_port = self.jdata.get("self_p2p_server_port", "")
+        self.p2p_server_host = self.jdata.get("self_p2p_server_host", "")
         if self.jdata.get("is_recv_boardcast", "") == "yes":
             self.is_recv_boardcast = True
         if self.jdata.get("agent") == "MINET":

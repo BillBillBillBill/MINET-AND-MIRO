@@ -69,26 +69,35 @@ class UserDataBox(QWidget):
             self.setLayout(layout)
 
     def create_P2P_chat_to_user(self, item):
-        # 此处其实可以用信号
         # 获取所在行单元格的内容
         def getItemContent(item, index):
             return self.MyTable.item(item.row(), index).text()
         receiver_nickname = getItemContent(item, 1)
 
         p2p_server_host, p2p_server_port = getItemContent(item, 2), getItemContent(item, 3)
-        # print p2p_server_port, p2p_server_host
-        # 创建新的tab
-        chat_tab = QTextBrowser()
-        self.main_window.tabView.addTab(chat_tab, receiver_nickname)
 
-        # 创建chat client
-        P2P_chat_client = P2PChatClient(p2p_server_host, p2p_server_port, receiver_nickname, self.main_window.client.nickname, self.main_window, chat_tab)
-        P2P_chat_manager.P2P_chat_objects[P2P_chat_client.secret_id]['chat_tab'] = chat_tab
-        P2P_chat_manager.P2P_chat_objects[P2P_chat_client.secret_id]['client'] = P2P_chat_client
-        # 把wiget名称改成secret id
-        chat_tab.setObjectName(P2P_chat_client.secret_id)
-        # 进行握手
-        P2P_chat_client.handshake()
+        jdata = {
+            "host": p2p_server_host,
+            "port": p2p_server_port,
+            "nickname": receiver_nickname,
+            "need_handshake": True
+        }
+
+        self.main_window.addTab_to_tabView_signal.emit(jdata)
+
+        # # 创建新的tab
+        # chat_tab = QTextBrowser()
+        # self.main_window.tabView.addTab(chat_tab, receiver_nickname)
+        #
+        # # 创建chat client
+        # P2P_chat_client = P2PChatClient(p2p_server_host, p2p_server_port, receiver_nickname, self.main_window.client.nickname, self.main_window, chat_tab)
+        # P2P_chat_manager.P2P_chat_objects[P2P_chat_client.secret_id]['chat_tab'] = chat_tab
+        # P2P_chat_manager.P2P_chat_objects[P2P_chat_client.secret_id]['client'] = P2P_chat_client
+        # # 把widget名称改成secret id
+        # chat_tab.setObjectName(P2P_chat_client.secret_id)
+        # # 切换到该tabview
+        # self.main_window.tabView.setCurrentWidget(chat_tab)
+
 
 
 class MainWindow(QWidget):
@@ -103,7 +112,6 @@ class MainWindow(QWidget):
         print "关闭client"
         self.recv_client.finish()
         print "关闭recv_client"
-
 
     def __init__(self, parent=None):
         super(MainWindow, self).__init__(parent)
@@ -346,17 +354,18 @@ class MainWindow(QWidget):
 
         # 启动p2p聊天服务器
         # 寻找可用端口
-        port = 54321
-        while isPortOpen(port):
-            port += 1
-        self.P2P_chat_TCP_server_thread = Thread(target=start_P2P_chat_TCP_server, args=(port,self))
+        self.self_p2p_server_host = "localhost"
+        self.self_p2p_server_port = 54321
+        while isPortOpen(self.self_p2p_server_port):
+            self.self_p2p_server_port += 1
+        self.P2P_chat_TCP_server_thread = Thread(target=start_P2P_chat_TCP_server, args=(self.self_p2p_server_host,self.self_p2p_server_port,self))
         self.P2P_chat_TCP_server_thread.start()
 
         # 启动群聊客户端
         self.client = TcpClient(self)
         self.recv_client = TcpClient(self, is_recv_boardcast=True)
-        self.client.handshake(p2p_server_port=port)
-        self.recv_client.handshake(p2p_server_port=port)
+        self.client.handshake(self.self_p2p_server_host, self.self_p2p_server_port)
+        self.recv_client.handshake(self.self_p2p_server_host, self.self_p2p_server_port)
 
         P2P_chat_manager.main_window = self
 
@@ -461,7 +470,7 @@ class MainWindow(QWidget):
         QTextBrowserObject.setText("%s%s"%(QTextBrowserObject.toPlainText(), msg))
         QTextBrowserObject.moveCursor(QTextBrowserObject.textCursor().End)
 
-    # 往tabview中添加 tab
+    # 往tabview中添加一个tab 并建立P2P_chat_client
     def addTab_to_tabView(self, jdata):
         host = jdata.get("host")
         port = jdata.get("port")
@@ -470,15 +479,25 @@ class MainWindow(QWidget):
         # 创建新的tab
         chat_tab = QTextBrowser()
         self.tabView.addTab(chat_tab, nickname)
-        # 创建chat client
-        P2P_chat_client = P2PChatClient(host, port, nickname, self.client.nickname, self, chat_tab, secret_id)
+        # 创建chat client 没有secret id 构造时会随机生成一个
+        if secret_id:
+            P2P_chat_client = P2PChatClient(host, port, nickname, self.client.nickname, self, chat_tab, secret_id)
+        else:
+            P2P_chat_client = P2PChatClient(host, port, nickname, self.client.nickname, self, chat_tab)
+            secret_id = P2P_chat_client.secret_id
         P2P_chat_manager.P2P_chat_objects[secret_id]['chat_tab'] = chat_tab
         P2P_chat_manager.P2P_chat_objects[secret_id]['client'] = P2P_chat_client
-        # 把wiget名称改成secret id
+        # 把widget名称改成secret id
         chat_tab.setObjectName(secret_id)
         # 切换到该tabview
-        print dir(self.tabView)
+        self.tabView.setCurrentWidget(chat_tab)
+        if jdata.get("need_handshake"):
+            # 进行握手
+            P2P_chat_client.handshake(self.self_p2p_server_host, self.self_p2p_server_port)
 
+        # 在界面提示连接成功
+        jdata = {"content": u"与%s建立P2P连接完成" % nickname, "nickname": u"【系统消息】"}
+        P2P_chat_manager.main_window.add_format_text_to_QTextBrowser_signal.emit(jdata, chat_tab)
 
     def send_msg(self):
         # 获取widget的名称

@@ -49,14 +49,15 @@ class TcpClient:
         # self.handshake()
         self.allow_action = ["handshake", "register", "login", "logout", "broadcast", "get_online_user"]
 
-    def handshake(self, p2p_server_port=None):
+    def handshake(self, self_p2p_server_host=None, self_p2p_server_port=None):
         if self.is_recv_boardcast:
             ack_msg = {"action": "handshake", "agent": "MINET", "is_recv_boardcast": "yes"}
         else:
             ack_msg = {"action": "handshake", "agent": "MINET"}
-        if p2p_server_port:
-            ack_msg["p2p_server_port"] = p2p_server_port
-        ack_msg["p2p_server_host"] = self.HOST
+        if self_p2p_server_host:
+            ack_msg["self_p2p_server_host"] = self_p2p_server_host
+        if self_p2p_server_port:
+            ack_msg["self_p2p_server_port"] = self_p2p_server_port
         ack_msg = json.dumps(ack_msg)
         self.send_json_and_recv(ack_msg)
         if self.jdata.get("server") != "MIRO":
@@ -277,7 +278,7 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
 
     # 握手
     def handshake_handler(self):
-        print u"建立连接"
+        print u"开始建立连接"
         host = self.jdata.get("host")
         port = self.jdata.get("port")
         nickname = self.jdata.get("nickname")
@@ -297,33 +298,28 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
 
     # 收取信息并显示
     def show_msg(self):
-        pass
-
-    # 发送消息
-    def send_msg(self, content):
-        now_time = time.strftime('%Y/%m/%d %H:%M:%S', time.localtime(time.time()))
-        broadcast_msg = {
-            "time": now_time,
-            "content": content,
-        }
-        self.request.sendall(json.dumps(broadcast_msg))
-
+        content = self.jdata.get("content")
+        secret_id = self.jdata.get("secret_id")
+        P2P_chat_object = P2P_chat_manager.P2P_chat_objects.get(secret_id)
+        if P2P_chat_object:
+            QTextBrowserObject = P2P_chat_object.get("chat_tab")
+            jdata = {"content": content, "nickname": P2P_chat_object.get("nickname")}
+            P2P_chat_manager.main_window.add_format_text_to_QTextBrowser_signal.emit(jdata, QTextBrowserObject)
+        else:
+            print u"找不到该聊天"
 
 class ThreadedTCPServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
     pass
 
-
 # 启动服务器
-def start_P2P_chat_TCP_server(PORT=54321, UI=None):
+def start_P2P_chat_TCP_server(HOST="localhost", PORT=54321, UI=None):
 
-    HOST = "localhost"
     ADDR = (HOST, PORT)
 
     print "start P2P chat server at port:", PORT
 
     SocketServer.TCPServer.allow_reuse_address = True
     server = ThreadedTCPServer(ADDR, ThreadedTCPRequestHandler)
-
 
     server_thread = threading.Thread(target=server.serve_forever)
     server_thread.daemon = True
@@ -350,8 +346,8 @@ class P2PChatClient:
         P2P_chat_manager.P2P_chat_objects[self.secret_id]['sender'] = self
         P2P_chat_manager.P2P_chat_objects[self.secret_id]['nickname'] = receiver_nickname
 
-    def handshake(self):
-        handshake_msg = u'{"action": "handshake", "host": "%s", "port": "%s", "nickname": "%s", "secret_id": "%s"}' % (self.host, self.port, self.self_nickname, self.secret_id)
+    def handshake(self, self_host, self_port):
+        handshake_msg = u'{"action": "handshake", "host": "%s", "port": "%s", "nickname": "%s", "secret_id": "%s"}' % (self_host, self_port, self.self_nickname, self.secret_id)
         self.send_json_and_recv(handshake_msg)
         if self.jdata.get("message") != "success":
             print "Handshake fail"
