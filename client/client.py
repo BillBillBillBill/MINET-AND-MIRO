@@ -4,8 +4,11 @@
 import socket
 import json
 import time
-from threading import Thread
 
+import threading
+import SocketServer
+import functools
+import traceback
 
 class TcpClient:
     HOST = "localhost"
@@ -172,6 +175,150 @@ class TcpClient:
         if self.isLogin and not self.is_recv_boardcast:
             self.logout()
         self.client.close()
+
+
+############ P2P聊天部分 ############
+
+connections = []
+recv_connections = []
+
+class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
+
+    def setup(self):
+        self.allow_action = {
+            "handshake": self.handshake_handler,
+            "chat": self.show_msg,
+        }
+
+
+    def finish(self):
+        if self in connections:
+            connections.remove(self)
+
+
+    # 重载其基类BaseHTTPRequestHandler的成员函数handle_one_reques
+    def handle_one_request(self):
+        """Handle a single HTTP request.
+
+        You normally don't need to override this method; see the class
+        __doc__ string for information on how to handle specific HTTP
+        commands such as GET and POST.
+
+        """
+        try:
+            self.raw_requestline = self.rfile.readline(65537)
+            if len(self.raw_requestline) > 65536:
+                self.requestline = ''
+                self.request_version = ''
+                self.command = ''
+                self.send_error(414)
+                return
+            if not self.raw_requestline:
+                self.close_connection = 1
+                return
+            if not self.parse_request():
+                # An error code has been sent, just exit
+                return
+            mname = 'do_' + self.command
+            if not hasattr(self, mname):
+                self.send_error(501, "Unsupported method (%r)" % self.command)
+                return
+            method = getattr(self, mname)
+            method()
+            # 没有判断 wfile 是否已经 close 就直接调用 flush()
+            self.wfile.flush() #actually send the response if not already done.
+        except socket.timeout, e:
+            # a read or a write timed out.  Discard this connection
+            self.log_error("Request timed out: %r", e)
+            self.close_connection = 1
+            return
+
+    # 处理用户发来的消息
+    def handle(self):
+        try:
+            while 1:
+                print connections
+
+                data = self.request.recv(1024)
+                if not data:
+                    print "用户退出"
+                    break
+                try:
+                    # 读取发来的json
+                    self.jdata = json.loads(data)
+                    action_type = self.jdata.get("action")
+                    # 根据请求由不同handler处理
+                    self.handle_action(action_type)
+                except Exception as e:
+                    print "Error:{} / Receive data:{} / traceback:{}".format(e.message, data, traceback.format_exc())
+
+        except Exception as e:
+            print "Error:{} / traceback:{}".format(e.message, traceback.format_exc())
+
+
+    # 根据不同action交给不同的handler处理
+    def handle_action(self, action_type):
+        print "Receive action:[%s]" % action_type
+
+        if action_type not in self.allow_action.keys():
+            return {"code": "UNKNOWN_METHOD", "message": "The action is unknown"}
+        else:
+            return self.allow_action[action_type]()
+
+    # 握手
+    def handshake_handler(self):
+        if self.jdata.get("is_recv_boardcast", "") == "yes":
+            self.is_recv_boardcast = True
+        if self.jdata.get("agent") == "MINET":
+            return {"server": "MIRO"}
+        else:
+            return {"code": "UNKNOWN_AGENT", "message": "Your agent is rejected."}
+
+
+    # 收取信息并显示
+    def show_msg(self):
+        pass
+
+
+    # 发送消息
+    def send_msg(self, content):
+        now_time = time.strftime('%Y/%m/%d %H:%M:%S', time.localtime(time.time()))
+        broadcast_msg = {
+            "time": now_time,
+            "content": content,
+        }
+        self.request.sendall(json.dumps(broadcast_msg))
+
+
+
+
+class ThreadedTCPServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
+    pass
+
+
+def start_P2P_chat_TCP_server():
+
+    HOST = "localhost"
+    PORT = 54321
+    ADDR = (HOST, PORT)
+
+    SocketServer.TCPServer.allow_reuse_address = True
+    server = ThreadedTCPServer(ADDR, ThreadedTCPRequestHandler)
+
+    server_thread = threading.Thread(target=server.serve_forever)
+
+    server_thread.daemon = True
+    server_thread.start()
+
+    server.serve_forever()
+
+
+class P2PChatClient:
+
+    def __init__(self):
+        pass
+
+#####################################
 
 if __name__ == "__main__":
     # msg1 = {'src':'hello', 'dst':"bar"}

@@ -4,10 +4,10 @@ import platform
 
 from PyQt5.QtGui import QKeyEvent
 from PyQt5.QtWidgets import (
-    QApplication, QMessageBox, QFileDialog, QWidget,
+    QApplication, QMessageBox, QFileDialog, QWidget, QDialog,
     QLabel, QLineEdit, QTextEdit, QRadioButton, QToolButton, QPushButton, QTextBrowser,
 	QButtonGroup, QFrame, QListWidget, QListWidgetItem, QTabWidget,
-    QHBoxLayout, QVBoxLayout, QGridLayout)
+    QHBoxLayout, QVBoxLayout, QGridLayout, QTableWidget, QTableWidgetItem)
 
 from PyQt5.QtCore import *
 from threading import Thread
@@ -15,6 +15,52 @@ from Queue import Queue
 from time import sleep
 from datetime import datetime
 from client import TcpClient
+
+
+class UserDataBox(QWidget):
+    def __init__(self):
+        QDialog.__init__(self)
+
+        userDataJson = [
+            ["user1", u"用户1", "127.0.0.1", "54321"],
+            # ["user233333", u"红红火火", "127.0.0.1", "54321"],
+            # ["user233333", u"红红火火", "127.0.0.1", "54321"],
+            # ["user233333", u"红红火火", "127.0.0.1", "54321"],
+            # ["user233333", u"红红火火", "127.0.0.1", "54321"],
+            # ["user233333", u"红红火火", "127.0.0.1", "54321"],
+        ]
+
+        userNum = len(userDataJson)
+
+        self.resize(450, 60+43*userNum)
+        self.setWindowTitle(u'在线用户列表')
+
+        self.MyTable = QTableWidget(userNum, 4)
+        self.MyTable.setHorizontalHeaderLabels(['用户名','昵称','IP','开放端口'])
+
+        for index,userData in enumerate(userDataJson):
+            newItem = QTableWidgetItem(userData[0])
+            newItem.setTextAlignment(Qt.AlignHCenter |  Qt.AlignVCenter)
+            self.MyTable.setItem(index, 0, newItem)
+
+            newItem = QTableWidgetItem(userData[1])
+            newItem.setTextAlignment(Qt.AlignHCenter |  Qt.AlignVCenter)
+            self.MyTable.setItem(index, 1, newItem)
+
+            newItem = QTableWidgetItem(userData[2])
+            newItem.setTextAlignment(Qt.AlignHCenter |  Qt.AlignVCenter)
+            self.MyTable.setItem(index, 2, newItem)
+
+            newItem = QTableWidgetItem(userData[3])
+            newItem.setTextAlignment(Qt.AlignHCenter |  Qt.AlignVCenter)
+            self.MyTable.setItem(index, 3, newItem)
+
+        self.MyTable.resizeColumnsToContents()   # 将列调整到跟内容大小相匹配
+        self.MyTable.resizeRowsToContents()      # 将行大小调整到跟内容的大小相匹配
+
+        layout = QHBoxLayout()
+        layout.addWidget(self.MyTable)
+        self.setLayout(layout)
 
 
 class MainWindow(QWidget):
@@ -35,7 +81,8 @@ class MainWindow(QWidget):
     def __init__(self, parent=None):
         super(MainWindow, self).__init__(parent)
 #        self.setWindowFlags(Qt.Window | Qt.FramelessWindowHint)
-#        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setWindowTitle("MINET")
         self.resize(500, 300)
 
         # 创建窗口部件
@@ -270,6 +317,10 @@ class MainWindow(QWidget):
         #self.start_recv_msg()
 
 
+        # 显示新窗口
+        self.tableViewWindow = UserDataBox()
+        self.tableViewWindow.show()
+
     # 检测回车，检测到就发送
     def detect_return(self):
         content = self.chat_msg_edit.toPlainText()
@@ -370,6 +421,9 @@ class MainWindow(QWidget):
     def send_msg(self):
         currentWidgetName = self.tabView.currentWidget().objectName()
         raw_content = self.chat_msg_edit.toPlainText()
+        # 内容后面统一换行
+        if not raw_content.endswith('\n'):
+            raw_content += '\n'
         content = raw_content.replace('\n', '\\n')
         self.chat_msg_edit.clear()
 
