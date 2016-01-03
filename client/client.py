@@ -265,6 +265,7 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
 
     # 握手
     def handshake_handler(self):
+        print u"建立连接"
         if self.jdata.get("is_recv_boardcast", "") == "yes":
             self.is_recv_boardcast = True
         if self.jdata.get("agent") == "MINET":
@@ -296,22 +297,20 @@ def start_P2P_chat_TCP_server(PORT=54321):
     HOST = "localhost"
     ADDR = (HOST, PORT)
 
-    print "P2P chat server port:", PORT
+    print "start P2P chat server at port:", PORT
 
     SocketServer.TCPServer.allow_reuse_address = True
     server = ThreadedTCPServer(ADDR, ThreadedTCPRequestHandler)
 
     server_thread = threading.Thread(target=server.serve_forever)
-
     server_thread.daemon = True
     server_thread.start()
-
     server.serve_forever()
 
 
 class P2PChatClient:
 
-    def __init__(self):
+    def __init__(self, host, port):
         pass
 
 #####################################

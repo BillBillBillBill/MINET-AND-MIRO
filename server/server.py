@@ -293,6 +293,8 @@ def start_MIRO():
     server_thread = threading.Thread(target=server.serve_forever)
     # Exit the server thread when the main thread terminates
     server_thread.daemon = True
+
+    print u"开启MIRO，监听端口", PORT
     server_thread.start()
     # Activate the server; this will keep running until you
     # interrupt the program with Ctrl-C

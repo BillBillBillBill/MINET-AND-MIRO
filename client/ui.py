@@ -19,7 +19,8 @@ from client import TcpClient, start_P2P_chat_TCP_server, isPortOpen
 
 
 class UserDataBox(QWidget):
-    def __init__(self, online_user_list=None):
+
+    def __init__(self, online_user_list=None, main_window=None):
         QDialog.__init__(self)
 
         # userDataJson = [
@@ -59,14 +60,27 @@ class UserDataBox(QWidget):
             self.MyTable.resizeColumnsToContents()   # 将列调整到跟内容大小相匹配
             self.MyTable.resizeRowsToContents()      # 将行大小调整到跟内容的大小相匹配
 
+            # 绑定信号
+            self.MyTable.itemDoubleClicked.connect(self.create_P2P_chat_to_user)
+
             layout = QHBoxLayout()
             layout.addWidget(self.MyTable)
             self.setLayout(layout)
 
+    def create_P2P_chat_to_user(self, item):
+        # 获取所在行单元格的内容
+        def getItemContent(item, index):
+            return self.MyTable.item(item.row(), index).text()
+        p2p_server_host, p2p_server_port = getItemContent(item, 2), getItemContent(item, 3)
+        print p2p_server_port, p2p_server_host
+        # 创建新的tab
+        P2P_chat = QTextBrowser()
+        main_window.tabView.addTab(P2P_chat, getItemContent(item, 1))
+
 
 class MainWindow(QWidget):
     # 声明信号 不能放init中
-    add_format_text_to_group_chat_signal = pyqtSignal(dict)
+    add_format_text_to_QTextBrowser_signal = pyqtSignal(dict, QTextBrowser)
 
     def closeEvent(self, QCloseEvent):
         print u"程序退出"
@@ -230,8 +244,8 @@ class MainWindow(QWidget):
             '}'
             'QTabBar::tab {'
                 'border: 0;'
-                'width:  100px;'
-                'height: 20px;'
+                'width:  110px;'
+                'height: 40px;'
                 'margin: 0 2px 0 0;'        # top right bottom left
                 # 'border-top-left-radius: 5px;'
                 # 'border-top-right-radius: 5px;'
@@ -247,7 +261,7 @@ class MainWindow(QWidget):
                 'border: 1px solid rgba(255, 255, 255, 200);'
                 'background: rgba(0, 0, 0, 80);'
             '}'
-            '#group_chat, #P2P_chat{'
+            'QTextBrowser{'
                 'background: rgba(0, 0, 0, 0);'
                 'color: white;'
                 'border: 0;'
@@ -300,8 +314,7 @@ class MainWindow(QWidget):
         self.show_online_user_btn.clicked.connect(self.show_online_user)
 
         # 绑定信号
-        self.add_format_text_to_group_chat_signal.connect(self.add_format_text_to_group_chat)
-
+        self.add_format_text_to_QTextBrowser_signal.connect(self.add_format_text_to_QTextBrowser)
         # 线程间共享数据队列
         queue_size = 10000
         self.__queue_result = Queue(queue_size)
@@ -357,7 +370,7 @@ class MainWindow(QWidget):
             online_user_list = self.client.get_online_user()
             print online_user_list
             # 显示新窗口
-            self.tableViewWindow = UserDataBox(online_user_list=online_user_list)
+            self.tableViewWindow = UserDataBox(online_user_list=online_user_list, main_window=self)
             self.tableViewWindow.show()
         except Exception, e:
             print e
@@ -435,8 +448,16 @@ class MainWindow(QWidget):
         text = jdata.get("content", "")
         nickname = jdata.get("nickname", "")
         msg = "%s %s\n%s\n" % (nickname, time, text)
-        self.P2P_chat.setText("%s%s"%(self.group_chat.toPlainText(), msg))
+        self.P2P_chat.setText("%s%s"%(self.P2P_chat.toPlainText(), msg))
         self.P2P_chat.moveCursor(self.P2P_chat.textCursor().End)
+
+    def add_format_text_to_QTextBrowser(self, jdata, QTextBrowserObject):
+        time = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+        text = jdata.get("content", "")
+        nickname = jdata.get("nickname", "")
+        msg = "%s %s\n%s\n" % (nickname, time, text)
+        QTextBrowserObject.setText("%s%s"%(QTextBrowserObject.toPlainText(), msg))
+        QTextBrowserObject.moveCursor(QTextBrowserObject.textCursor().End)
 
     def send_msg(self):
         currentWidgetName = self.tabView.currentWidget().objectName()
@@ -451,7 +472,7 @@ class MainWindow(QWidget):
             try:
                 assert self.client.broadcast(content)
                 jdata = {"content": raw_content, "nickname": u"自己"}
-                self.add_format_text_to_group_chat(jdata)
+                self.add_format_text_to_QTextBrowser(jdata, self.group_chat)
             except Exception, e:
                 print "send_msg:", e
                 QMessageBox.warning(
@@ -472,7 +493,7 @@ class MainWindow(QWidget):
                 jdata = self.recv_client.receive_one_msg()
                 if jdata.keys() == ['content', 'nickname', 'user', 'time']:
                     #self.add_format_text_to_group_chat(jdata['content'])
-                    self.add_format_text_to_group_chat_signal.emit(jdata)
+                    self.add_format_text_to_QTextBrowser_signal.emit(jdata, self.group_chat)
                     print jdata['nickname'], "发来消息：", jdata['content']
         self.recv_msg_thread = Thread(target=start)
         self.recv_msg_thread.start()
