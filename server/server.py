@@ -149,7 +149,7 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
     def get_user_info(self):
         user_info = []
         for conn in connections:
-            user_info.append([conn.get_user(), r.get("user:" + conn.get_user() +":nickname"), conn.p2p_server_host, conn.p2p_server_port])
+            user_info.append([conn.get_user(), r.get("user:" + conn.get_user() + ":nickname"), conn.p2p_server_host, conn.p2p_server_port])
         return user_info
 
     # 握手
@@ -203,7 +203,7 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
                         self.broadcast_login()
                         r.sadd("online_user", username)
                     #self.broadcast({"action": "login", "user": self.get_user(), "nickname": r.get("user:" + username +":nickname")})
-                    return {"code": "LOGIN_SUCCESS", "message": "success"}
+                    return {"code": "LOGIN_SUCCESS", "message": "success", "nickname": r.get("user:" + self.get_user() + ":nickname")}
                 else:
                     return {"code": "LOGIN_FAIL", "message": "Username and password not match"}
             except Exception, e:
@@ -294,7 +294,7 @@ def start_MIRO():
     # Exit the server thread when the main thread terminates
     server_thread.daemon = True
 
-    print u"开启MIRO，监听端口", PORT
+    print u"MIRO 开启，监听端口：", PORT
     server_thread.start()
     # Activate the server; this will keep running until you
     # interrupt the program with Ctrl-C

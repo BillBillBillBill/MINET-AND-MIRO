@@ -8,6 +8,7 @@ import time
 import threading
 import SocketServer
 import traceback
+import uuid
 
 # 检测端口是否被占用
 def isPortOpen(port):
@@ -19,6 +20,12 @@ def isPortOpen(port):
     except:
         return False
 
+
+# 生成一个secrect id
+def generate_secrect_id():
+    return uuid.uuid4().hex
+
+
 class TcpClient:
     HOST = "localhost"
     PORT = 12345
@@ -28,6 +35,7 @@ class TcpClient:
     def __init__(self, UI=None, is_recv_boardcast=False):
         self.isMIRO = False
         self.isLogin = False
+        self.nickname = None
         self.UI = UI
         self.is_recv_boardcast = is_recv_boardcast
         self.jdata = {}
@@ -72,6 +80,8 @@ class TcpClient:
         if self.jdata.get("code") == "LOGIN_SUCCESS":
             self.isLogin = True
             print "Login success"
+            if self.jdata.get("nickname"):
+                self.nickname = self.jdata.get("nickname")
             return True
         else:
             print "Login fail, reason:", self.jdata.get("message")
@@ -180,20 +190,21 @@ class TcpClient:
 
 ############ P2P聊天部分 ############
 
-connections = []
-recv_connections = []
+class P2P_chat_manager(object):
+    P2P_chat_objects = {}
+
 
 class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
 
-    def setup(self):
+    def setup(self, UI=None):
         self.allow_action = {
             "handshake": self.handshake_handler,
             "chat": self.show_msg,
         }
 
     def finish(self):
-        if self in connections:
-            connections.remove(self)
+        # 断开连接
+        pass
 
     # 重载其基类BaseHTTPRequestHandler的成员函数handle_one_reques
     def handle_one_request(self):
@@ -236,11 +247,8 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
     def handle(self):
         try:
             while 1:
-                print connections
-
                 data = self.request.recv(1024)
                 if not data:
-                    print "用户退出"
                     break
                 try:
                     # 读取发来的json
@@ -266,12 +274,15 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
     # 握手
     def handshake_handler(self):
         print u"建立连接"
-        if self.jdata.get("is_recv_boardcast", "") == "yes":
-            self.is_recv_boardcast = True
-        if self.jdata.get("agent") == "MINET":
-            return {"server": "MIRO"}
+        host = self.jdata.get("host")
+        port = self.jdata.get("port")
+        nickname = self.jdata.get("nickname")
+        secret_id = self.jdata.get("secret_id")
+        if not all([host, port, nickname, secret_id]):
+            return {"code": "MORE_DATA_NEEDED", "message": "You must send host, port, nickname, secret_id"}
         else:
-            return {"code": "UNKNOWN_AGENT", "message": "Your agent is rejected."}
+            # 建立对话
+            return {"message": "success"}
 
     # 收取信息并显示
     def show_msg(self):
@@ -292,7 +303,7 @@ class ThreadedTCPServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
 
 
 # 启动服务器
-def start_P2P_chat_TCP_server(PORT=54321):
+def start_P2P_chat_TCP_server(PORT=54321, UI=None):
 
     HOST = "localhost"
     ADDR = (HOST, PORT)
@@ -302,6 +313,7 @@ def start_P2P_chat_TCP_server(PORT=54321):
     SocketServer.TCPServer.allow_reuse_address = True
     server = ThreadedTCPServer(ADDR, ThreadedTCPRequestHandler)
 
+
     server_thread = threading.Thread(target=server.serve_forever)
     server_thread.daemon = True
     server_thread.start()
@@ -310,8 +322,68 @@ def start_P2P_chat_TCP_server(PORT=54321):
 
 class P2PChatClient:
 
-    def __init__(self, host, port):
-        pass
+    def __init__(self, host, port, receiver_nickname, self_nickname, UI=None, chat_tab=None, secret_id=None):
+        self.host = host
+        self.port = int(port)
+        self.receiver_nickname = receiver_nickname
+        self.self_nickname = self_nickname
+        self.UI = UI
+        self.chat_tab = chat_tab
+        self.secret_id = generate_secrect_id() if not secret_id else secret_id
+        self.ADDR = (host, self.port)
+        self.jdata = {}
+        self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.client.connect(self.ADDR)
+        self.allow_action = ["handshake", "chat"]
+        P2P_chat_manager.P2P_chat_objects[self.secret_id] = {}
+        P2P_chat_manager.P2P_chat_objects[self.secret_id]['sender'] = self
+        P2P_chat_manager.P2P_chat_objects[self.secret_id]['nickname'] = receiver_nickname
+
+    def handshake(self):
+        handshake_msg = {"action": "handshake", "host": "%s", "port": "%s", "nickname": "%s", "secret_id": "%s"} % (self.host, self.port, self.self_nickname, self.secret_id)
+        handshake = json.dumps(handshake)
+        self.send_json_and_recv(handshake)
+        if self.jdata.get("message") != "success":
+            print "Handshake fail"
+            self.client.close()
+        else:
+            print "Handshake success"
+
+    def chat(self, content=""):
+        broadcast_msg = '{"action": "chat", "content": "%s", "secret_id": "%s"}' % (content, self.secret_id)
+        try:
+            self.send_json(broadcast_msg)
+            print "Send message success"
+            self.UI.add_format_text_to_QTextBrowser()
+            return True
+        except Exception, e:
+            print e
+            print "Send message fail, reason:", self.jdata.get("message")
+            return False
+
+    def send_json(self, message):
+        """
+        发送信息
+        """
+        try:
+            print u"Send: {}".format(message)
+            self.client.sendall(message.encode("utf-8"))
+        except Exception as e:
+            print "send_json:", e
+
+    def send_json_and_recv(self, message):
+        try:
+            #  print "Send: {}".format(message)
+            self.client.sendall(message.encode("utf-8"))
+            response = self.client.recv(self.BUFSIZ)
+            self.jdata = json.loads(response)
+            print "Recv: ", self.jdata
+        except Exception as e:
+            print "send_json_and_recv:", e
+
+    def finish(self):
+        # 断开连接
+        self.client.close()
 
 #####################################
 

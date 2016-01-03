@@ -15,14 +15,14 @@ from threading import Thread
 from Queue import Queue
 from time import sleep
 from datetime import datetime
-from client import TcpClient, start_P2P_chat_TCP_server, isPortOpen
+from client import TcpClient, start_P2P_chat_TCP_server, isPortOpen, P2PChatClient, P2P_chat_manager
 
 
 class UserDataBox(QWidget):
 
     def __init__(self, online_user_list=None, main_window=None):
-        QDialog.__init__(self)
 
+        self.main_window = main_window
         # userDataJson = [
         #     ["user1", u"用户1", "127.0.0.1", "54321"],
         #     # ["user233333", u"红红火火", "127.0.0.1", "54321"],
@@ -32,35 +32,36 @@ class UserDataBox(QWidget):
         #     # ["user233333", u"红红火火", "127.0.0.1", "54321"],
         # ]
         if online_user_list:
+            QDialog.__init__(self)
             userNum = len(online_user_list)
 
             self.resize(450, 60+43*userNum)
             self.setWindowTitle(u'在线用户列表')
 
             self.MyTable = QTableWidget(userNum, 4)
-            self.MyTable.setHorizontalHeaderLabels(['用户名','昵称','IP','开放端口'])
+            self.MyTable.setHorizontalHeaderLabels(['用户名', '昵称', 'IP', '开放端口'])
 
             for index,userData in enumerate(online_user_list):
                 newItem = QTableWidgetItem(userData[0])
-                newItem.setTextAlignment(Qt.AlignHCenter |  Qt.AlignVCenter)
+                newItem.setTextAlignment(Qt.AlignHCenter | Qt.AlignVCenter)
                 self.MyTable.setItem(index, 0, newItem)
 
                 newItem = QTableWidgetItem(userData[1])
-                newItem.setTextAlignment(Qt.AlignHCenter |  Qt.AlignVCenter)
+                newItem.setTextAlignment(Qt.AlignHCenter | Qt.AlignVCenter)
                 self.MyTable.setItem(index, 1, newItem)
 
                 newItem = QTableWidgetItem(userData[2])
-                newItem.setTextAlignment(Qt.AlignHCenter |  Qt.AlignVCenter)
+                newItem.setTextAlignment(Qt.AlignHCenter | Qt.AlignVCenter)
                 self.MyTable.setItem(index, 2, newItem)
 
                 newItem = QTableWidgetItem(str(userData[3]))
-                newItem.setTextAlignment(Qt.AlignHCenter |  Qt.AlignVCenter)
+                newItem.setTextAlignment(Qt.AlignHCenter | Qt.AlignVCenter)
                 self.MyTable.setItem(index, 3, newItem)
 
             self.MyTable.resizeColumnsToContents()   # 将列调整到跟内容大小相匹配
             self.MyTable.resizeRowsToContents()      # 将行大小调整到跟内容的大小相匹配
 
-            # 绑定信号
+            # 绑定信号 双击表格项时开始p2p聊天
             self.MyTable.itemDoubleClicked.connect(self.create_P2P_chat_to_user)
 
             layout = QHBoxLayout()
@@ -71,12 +72,19 @@ class UserDataBox(QWidget):
         # 获取所在行单元格的内容
         def getItemContent(item, index):
             return self.MyTable.item(item.row(), index).text()
-        p2p_server_host, p2p_server_port = getItemContent(item, 2), getItemContent(item, 3)
-        print p2p_server_port, p2p_server_host
-        # 创建新的tab
-        P2P_chat = QTextBrowser()
-        main_window.tabView.addTab(P2P_chat, getItemContent(item, 1))
+        receiver_nickname = getItemContent(item, 1)
 
+        p2p_server_host, p2p_server_port = getItemContent(item, 2), getItemContent(item, 3)
+        # print p2p_server_port, p2p_server_host
+        # 创建新的tab
+        chat_tab = QTextBrowser()
+        self.main_window.tabView.addTab(chat_tab, receiver_nickname)
+
+        # 创建chat client
+        self.main_window.P2P_chat_client = P2PChatClient(p2p_server_host, p2p_server_port, receiver_nickname, self.main_window.client.nickname, self.main_window, chat_tab)
+        P2P_chat_manager.P2P_chat_objects[self.main_window.P2P_chat_client.secret_id]['chat_tab'] = chat_tab
+        # 把wiget名称改成secret id
+        chat_tab.setObjectName(self.main_window.P2P_chat_client.secret_id)
 
 class MainWindow(QWidget):
     # 声明信号 不能放init中
@@ -129,9 +137,9 @@ class MainWindow(QWidget):
 
         self.tabView = QTabWidget()
         self.group_chat = QTextBrowser()
-        self.P2P_chat = QTextBrowser()
+        # self.P2P_chat = QTextBrowser()
         self.tabView.addTab(self.group_chat, '群聊')
-        self.tabView.addTab(self.P2P_chat, 'P2P聊天')
+        # self.tabView.addTab(self.P2P_chat, 'P2P聊天')
 
         self.chat_msg_edit = QTextEdit()
         self.send_msg_btn = QPushButton('发送')
@@ -204,7 +212,7 @@ class MainWindow(QWidget):
         self.title.setObjectName('title')
         self.tabView.setObjectName('tabView')
         self.group_chat.setObjectName('group_chat')
-        self.P2P_chat.setObjectName('P2P_chat')
+        # self.P2P_chat.setObjectName('P2P_chat')
         self.chat_msg_edit.setObjectName('chat_msg_edit')
         self.username_lab.setObjectName('username_lab')
         self.password_lab.setObjectName('password_lab')
@@ -333,7 +341,7 @@ class MainWindow(QWidget):
         port = 54321
         while isPortOpen(port):
             port += 1
-        self.P2P_chat_TCP_server_thread = Thread(target=start_P2P_chat_TCP_server, args=(port,))
+        self.P2P_chat_TCP_server_thread = Thread(target=start_P2P_chat_TCP_server, args=(port,self))
         self.P2P_chat_TCP_server_thread.start()
 
         # 启动群聊客户端
@@ -435,22 +443,7 @@ class MainWindow(QWidget):
                 "注册失败！",
                 QMessageBox.Yes)
 
-    def add_format_text_to_group_chat(self, jdata):
-        time = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
-        text = jdata.get("content", "")
-        nickname = jdata.get("nickname", "")
-        msg = "%s %s\n%s\n" % (nickname, time, text)
-        self.group_chat.setText("%s%s"%(self.group_chat.toPlainText(), msg))
-        self.group_chat.moveCursor(self.group_chat.textCursor().End)
-
-    def add_format_text_to_P2P_chat(self, jdata):
-        time = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
-        text = jdata.get("content", "")
-        nickname = jdata.get("nickname", "")
-        msg = "%s %s\n%s\n" % (nickname, time, text)
-        self.P2P_chat.setText("%s%s"%(self.P2P_chat.toPlainText(), msg))
-        self.P2P_chat.moveCursor(self.P2P_chat.textCursor().End)
-
+    # 往QTextBrowser中添加格式化的文本
     def add_format_text_to_QTextBrowser(self, jdata, QTextBrowserObject):
         time = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
         text = jdata.get("content", "")
@@ -460,7 +453,9 @@ class MainWindow(QWidget):
         QTextBrowserObject.moveCursor(QTextBrowserObject.textCursor().End)
 
     def send_msg(self):
+        # 获取widget的名称
         currentWidgetName = self.tabView.currentWidget().objectName()
+        print "currentWidgetName:", currentWidgetName
         raw_content = self.chat_msg_edit.toPlainText()
         # 内容后面统一换行
         if not raw_content.endswith('\n'):
@@ -481,8 +476,21 @@ class MainWindow(QWidget):
                     "发送失败！",
                     QMessageBox.Yes)
         else:
-            jdata = {"content": raw_content, "nickname": u"自己"}
-            self.add_format_text_to_P2P_chat(jdata)
+            try:
+                jdata = {"content": raw_content, "nickname": u"自己"}
+                objs = P2P_chat_manager.P2P_chat_objects
+                for secret_id in objs:
+                    print objs[secret_id]
+                    if secret_id == currentWidgetName:
+                        self.add_format_text_to_QTextBrowser(jdata, objs[secret_id].get('chat_tab'))
+                        objs[secret_id].get('sender').chat(content)
+            except Exception, e:
+                print "send_msg:", e
+                QMessageBox.warning(
+                    self,
+                    "提示",
+                    "发送失败！",
+                    QMessageBox.Yes)
 
     def start_recv_msg(self):
         def start():
@@ -494,7 +502,7 @@ class MainWindow(QWidget):
                 if jdata.keys() == ['content', 'nickname', 'user', 'time']:
                     #self.add_format_text_to_group_chat(jdata['content'])
                     self.add_format_text_to_QTextBrowser_signal.emit(jdata, self.group_chat)
-                    print jdata['nickname'], "发来消息：", jdata['content']
+                    print jdata['nickname'], "发来消息:", jdata['content']
         self.recv_msg_thread = Thread(target=start)
         self.recv_msg_thread.start()
         return True
