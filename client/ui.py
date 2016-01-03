@@ -1,6 +1,7 @@
 #coding:utf-8
 import re
 import platform
+import json
 
 from PyQt5.QtGui import QKeyEvent
 from PyQt5.QtWidgets import (
@@ -14,59 +15,58 @@ from threading import Thread
 from Queue import Queue
 from time import sleep
 from datetime import datetime
-from client import TcpClient
+from client import TcpClient, start_P2P_chat_TCP_server, isPortOpen
 
 
 class UserDataBox(QWidget):
-    def __init__(self):
+    def __init__(self, online_user_list=None):
         QDialog.__init__(self)
 
-        userDataJson = [
-            ["user1", u"用户1", "127.0.0.1", "54321"],
-            # ["user233333", u"红红火火", "127.0.0.1", "54321"],
-            # ["user233333", u"红红火火", "127.0.0.1", "54321"],
-            # ["user233333", u"红红火火", "127.0.0.1", "54321"],
-            # ["user233333", u"红红火火", "127.0.0.1", "54321"],
-            # ["user233333", u"红红火火", "127.0.0.1", "54321"],
-        ]
+        # userDataJson = [
+        #     ["user1", u"用户1", "127.0.0.1", "54321"],
+        #     # ["user233333", u"红红火火", "127.0.0.1", "54321"],
+        #     # ["user233333", u"红红火火", "127.0.0.1", "54321"],
+        #     # ["user233333", u"红红火火", "127.0.0.1", "54321"],
+        #     # ["user233333", u"红红火火", "127.0.0.1", "54321"],
+        #     # ["user233333", u"红红火火", "127.0.0.1", "54321"],
+        # ]
+        if online_user_list:
+            userNum = len(online_user_list)
 
-        userNum = len(userDataJson)
+            self.resize(450, 60+43*userNum)
+            self.setWindowTitle(u'在线用户列表')
 
-        self.resize(450, 60+43*userNum)
-        self.setWindowTitle(u'在线用户列表')
+            self.MyTable = QTableWidget(userNum, 4)
+            self.MyTable.setHorizontalHeaderLabels(['用户名','昵称','IP','开放端口'])
 
-        self.MyTable = QTableWidget(userNum, 4)
-        self.MyTable.setHorizontalHeaderLabels(['用户名','昵称','IP','开放端口'])
+            for index,userData in enumerate(online_user_list):
+                newItem = QTableWidgetItem(userData[0])
+                newItem.setTextAlignment(Qt.AlignHCenter |  Qt.AlignVCenter)
+                self.MyTable.setItem(index, 0, newItem)
 
-        for index,userData in enumerate(userDataJson):
-            newItem = QTableWidgetItem(userData[0])
-            newItem.setTextAlignment(Qt.AlignHCenter |  Qt.AlignVCenter)
-            self.MyTable.setItem(index, 0, newItem)
+                newItem = QTableWidgetItem(userData[1])
+                newItem.setTextAlignment(Qt.AlignHCenter |  Qt.AlignVCenter)
+                self.MyTable.setItem(index, 1, newItem)
 
-            newItem = QTableWidgetItem(userData[1])
-            newItem.setTextAlignment(Qt.AlignHCenter |  Qt.AlignVCenter)
-            self.MyTable.setItem(index, 1, newItem)
+                newItem = QTableWidgetItem(userData[2])
+                newItem.setTextAlignment(Qt.AlignHCenter |  Qt.AlignVCenter)
+                self.MyTable.setItem(index, 2, newItem)
 
-            newItem = QTableWidgetItem(userData[2])
-            newItem.setTextAlignment(Qt.AlignHCenter |  Qt.AlignVCenter)
-            self.MyTable.setItem(index, 2, newItem)
+                newItem = QTableWidgetItem(str(userData[3]))
+                newItem.setTextAlignment(Qt.AlignHCenter |  Qt.AlignVCenter)
+                self.MyTable.setItem(index, 3, newItem)
 
-            newItem = QTableWidgetItem(userData[3])
-            newItem.setTextAlignment(Qt.AlignHCenter |  Qt.AlignVCenter)
-            self.MyTable.setItem(index, 3, newItem)
+            self.MyTable.resizeColumnsToContents()   # 将列调整到跟内容大小相匹配
+            self.MyTable.resizeRowsToContents()      # 将行大小调整到跟内容的大小相匹配
 
-        self.MyTable.resizeColumnsToContents()   # 将列调整到跟内容大小相匹配
-        self.MyTable.resizeRowsToContents()      # 将行大小调整到跟内容的大小相匹配
-
-        layout = QHBoxLayout()
-        layout.addWidget(self.MyTable)
-        self.setLayout(layout)
+            layout = QHBoxLayout()
+            layout.addWidget(self.MyTable)
+            self.setLayout(layout)
 
 
 class MainWindow(QWidget):
     # 声明信号 不能放init中
     add_format_text_to_group_chat_signal = pyqtSignal(dict)
-
 
     def closeEvent(self, QCloseEvent):
         print u"程序退出"
@@ -75,7 +75,6 @@ class MainWindow(QWidget):
         print "关闭client"
         self.recv_client.finish()
         print "关闭recv_client"
-
 
 
     def __init__(self, parent=None):
@@ -112,6 +111,8 @@ class MainWindow(QWidget):
         self.register_btn.setFixedWidth(100)
 
         # 显示详细聊天部分
+        self.show_online_user_btn = QPushButton('查看在线用户')
+
         self.tabView = QTabWidget()
         self.group_chat = QTextBrowser()
         self.P2P_chat = QTextBrowser()
@@ -162,6 +163,7 @@ class MainWindow(QWidget):
 
         # 聊天部分widget
         self.chat_layout = QVBoxLayout()
+        self.chat_layout.addWidget(self.show_online_user_btn)
         self.chat_layout.addWidget(self.tabView)
         self.chat_layout.addWidget(self.chat_msg_edit)
         self.chat_layout.addWidget(self.send_msg_btn)
@@ -295,6 +297,7 @@ class MainWindow(QWidget):
         self.chat_msg_edit.textChanged.connect(self.detect_return)
         self.type_select_register.toggled.connect(self.toggle_register)
         self.type_select_login.toggled.connect(self.toggle_login)
+        self.show_online_user_btn.clicked.connect(self.show_online_user)
 
         # 绑定信号
         self.add_format_text_to_group_chat_signal.connect(self.add_format_text_to_group_chat)
@@ -312,14 +315,19 @@ class MainWindow(QWidget):
         # self.chat_layout_widgets = [self.tabView, self.chat_msg_edit, self.send_msg_btn]
         # self.login_layout_widgets = [self.login_btn_fram, self.login_input_fram]
 
+        # 启动p2p聊天服务器
+        # 寻找可用端口
+        port = 54321
+        while isPortOpen(port):
+            port += 1
+        self.P2P_chat_TCP_server_thread = Thread(target=start_P2P_chat_TCP_server, args=(port,))
+        self.P2P_chat_TCP_server_thread.start()
+
+        # 启动群聊客户端
         self.client = TcpClient(self)
         self.recv_client = TcpClient(self, is_recv_boardcast=True)
-        #self.start_recv_msg()
-
-
-        # 显示新窗口
-        self.tableViewWindow = UserDataBox()
-        self.tableViewWindow.show()
+        self.client.handshake(p2p_server_port=port)
+        self.recv_client.handshake(p2p_server_port=port)
 
     # 检测回车，检测到就发送
     def detect_return(self):
@@ -328,14 +336,12 @@ class MainWindow(QWidget):
         if content.endswith('\n'):
             self.send_msg_btn.click()
 
-
     #　切换到注册页
     def toggle_register(self):
         self.login_btn.hide()
         self.register_btn.show()
         self.nickname_lab.show()
         self.nickname_edit.show()
-
 
     #　切换到登录页
     def toggle_login(self):
@@ -344,12 +350,30 @@ class MainWindow(QWidget):
         self.nickname_lab.hide()
         self.nickname_edit.hide()
 
+    # 查看在线用户（弹出窗口）
+    def show_online_user(self):
+        # 查询在线用户
+        try:
+            online_user_list = self.client.get_online_user()
+            print online_user_list
+            # 显示新窗口
+            self.tableViewWindow = UserDataBox(online_user_list=online_user_list)
+            self.tableViewWindow.show()
+        except Exception, e:
+            print e
+            QMessageBox.warning(
+                self,
+                "提示",
+                "查询失败TAT",
+                QMessageBox.Yes)
+            pass
+
 
     def login(self):
         username = self.username_edit.text()
         password = self.password_edit.text()
-        print "username:"+username
-        print "password:"+password
+        # print "username:"+username
+        # print "password:"+password
         try:
             assert self.client.login(username, password)
             assert self.recv_client.login(username, password)
@@ -374,14 +398,13 @@ class MainWindow(QWidget):
                 "登录失败！",
                 QMessageBox.Yes)
 
-
     def register(self):
         username = self.username_edit.text()
         password = self.password_edit.text()
         nickname = self.nickname_edit.text()
-        print "username:"+username
-        print "password:"+password
-        print "nickname:"+nickname
+        # print "username:"+username
+        # print "password:"+password
+        # print "nickname:"+nickname
         try:
             assert self.client.register(username, password, nickname)
             QMessageBox.information(
@@ -399,7 +422,6 @@ class MainWindow(QWidget):
                 "注册失败！",
                 QMessageBox.Yes)
 
-
     def add_format_text_to_group_chat(self, jdata):
         time = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
         text = jdata.get("content", "")
@@ -408,7 +430,6 @@ class MainWindow(QWidget):
         self.group_chat.setText("%s%s"%(self.group_chat.toPlainText(), msg))
         self.group_chat.moveCursor(self.group_chat.textCursor().End)
 
-
     def add_format_text_to_P2P_chat(self, jdata):
         time = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
         text = jdata.get("content", "")
@@ -416,7 +437,6 @@ class MainWindow(QWidget):
         msg = "%s %s\n%s\n" % (nickname, time, text)
         self.P2P_chat.setText("%s%s"%(self.group_chat.toPlainText(), msg))
         self.P2P_chat.moveCursor(self.P2P_chat.textCursor().End)
-
 
     def send_msg(self):
         currentWidgetName = self.tabView.currentWidget().objectName()
@@ -442,7 +462,6 @@ class MainWindow(QWidget):
         else:
             jdata = {"content": raw_content, "nickname": u"自己"}
             self.add_format_text_to_P2P_chat(jdata)
-
 
     def start_recv_msg(self):
         def start():

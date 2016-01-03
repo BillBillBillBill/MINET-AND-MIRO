@@ -11,6 +11,18 @@ import time
 import traceback
 from conn import r
 
+
+# 检测端口是否被占用
+def isPortOpen(port):
+    import telnetlib
+    try:
+        test = telnetlib.Telnet('localhost', port)
+        test.close()
+        return True
+    except:
+        return False
+
+
 connections = []
 recv_connections = []
 
@@ -31,6 +43,8 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
     def setup(self):
         self.isLogin = False
         self.user = None
+        self.p2p_server_host = None
+        self.p2p_server_port = None
         self.is_recv_boardcast = False
         self.allow_action = {
             "handshake": self.handshake_handler,
@@ -39,7 +53,7 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
             "logout": self.logout_handler,
             "show_info": self.show_info,
             "broadcast": self.broadcast_handler,
-            "get_online_user": self.get_online_user_handler,
+            "get_online_user": self.get_user_info,
         }
 
     def finish(self):
@@ -127,20 +141,27 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
         else:
             return self.allow_action[action_type]()
 
-
     # 显示信息
     def show_info(self):
         return {"code": "CURRENT_THREADS", "message": "The current threads are {}, current users ars {}".format(connections, self.get_all_user())}
 
+    # 获取在线用户信息
+    def get_user_info(self):
+        user_info = []
+        for conn in connections:
+            user_info.append([conn.get_user(), r.get("user:" + conn.get_user() +":nickname"), conn.p2p_server_host, conn.p2p_server_port])
+        return user_info
+
     # 握手
     def handshake_handler(self):
+        self.p2p_server_port = self.jdata.get("p2p_server_port", "")
+        self.p2p_server_host = self.jdata.get("p2p_server_host", "")
         if self.jdata.get("is_recv_boardcast", "") == "yes":
             self.is_recv_boardcast = True
         if self.jdata.get("agent") == "MINET":
             return {"server": "MIRO"}
         else:
             return {"code": "UNKNOWN_AGENT", "message": "Your agent is rejected."}
-
 
     # 用户注册
     def register_handler(self):
@@ -158,8 +179,7 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
                 return {"code": "REGISTER_SUCCESS", "message": "success"}
             except Exception, e:
                 print "Error:",e.message,traceback.format_exc()
-                return {"code": "SERVER_ERROR","message": "Server Error"}
-
+                return {"code": "SERVER_ERROR", "message": "Server Error"}
 
     # 用户登录
     def login_handler(self):
@@ -202,17 +222,6 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
         except Exception, e:
             print e
         return {"code": "LOGOUT_SUCCESS", "message": "success"}
-
-
-    # 获取在线用户
-    def get_online_user_handler(self):
-        users = []
-        for conn in connections:
-            if conn.get_user() != self.user:
-                users.append(conn.get_user())
-        print users
-        return {"user": users}
-
 
     # 处理广播事件
     @authenticated
@@ -265,13 +274,17 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
 class ThreadedTCPServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
     pass
 
-if __name__ == "__main__":
+# 启动服务器
+def start_MIRO():
     # Port 0 means to select an arbitrary unused port
     HOST = "localhost"
     PORT = 12345
+    # 寻找可用端口
+    while isPortOpen(PORT):
+        PORT += 1
     BUFSIZ = 1024
     ADDR = (HOST, PORT)
-    
+
     SocketServer.TCPServer.allow_reuse_address = True
     server = ThreadedTCPServer(ADDR, ThreadedTCPRequestHandler)
 
@@ -284,3 +297,6 @@ if __name__ == "__main__":
     # Activate the server; this will keep running until you
     # interrupt the program with Ctrl-C
     server.serve_forever()
+
+if __name__ == "__main__":
+    start_MIRO()

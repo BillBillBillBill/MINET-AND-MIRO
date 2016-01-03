@@ -7,15 +7,23 @@ import time
 
 import threading
 import SocketServer
-import functools
 import traceback
+
+# 检测端口是否被占用
+def isPortOpen(port):
+    import telnetlib
+    try:
+        test = telnetlib.Telnet('localhost', port)
+        test.close()
+        return True
+    except:
+        return False
 
 class TcpClient:
     HOST = "localhost"
     PORT = 12345
     BUFSIZ = 1024
     ADDR = (HOST, PORT)
-
 
     def __init__(self, UI=None, is_recv_boardcast=False):
         self.isMIRO = False
@@ -25,17 +33,20 @@ class TcpClient:
         self.jdata = {}
         self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.client.connect(self.ADDR)
-        print self.client.getpeername()
-        print self.client.getsockname()
-        self.handshake()
+        # print self.client.getpeername()
+        # print self.client.getsockname()
+        # self.handshake()
         self.allow_action = ["handshake", "register", "login", "logout", "broadcast", "get_online_user"]
 
-
-    def handshake(self):
+    def handshake(self, p2p_server_port=None):
         if self.is_recv_boardcast:
-            ack_msg = '{"action": "handshake", "agent": "MINET", "is_recv_boardcast": "yes"}'
+            ack_msg = {"action": "handshake", "agent": "MINET", "is_recv_boardcast": "yes"}
         else:
-            ack_msg = '{"action": "handshake", "agent": "MINET"}'
+            ack_msg = {"action": "handshake", "agent": "MINET"}
+        if p2p_server_port:
+            ack_msg["p2p_server_port"] = p2p_server_port
+        ack_msg["p2p_server_host"] = self.HOST
+        ack_msg = json.dumps(ack_msg)
         self.send_json_and_recv(ack_msg)
         if self.jdata.get("server") != "MIRO":
             print "Server is not MIRO"
@@ -43,7 +54,6 @@ class TcpClient:
         else:
             self.isMIRO = True
             print "Connect to MIRO"
-
 
     def register(self, username, password, nickname):
         register_msg = '{"action": "register", "username": "%s", "password": "%s", "nickname": "%s"}'\
@@ -56,7 +66,6 @@ class TcpClient:
             print "Register fail, reason:", self.jdata.get("message")
             return False
 
-
     def login(self, username, password):
         register_msg = '{"action": "login", "username": "%s", "password": "%s"}' % (username, password)
         self.send_json_and_recv(register_msg)
@@ -68,7 +77,6 @@ class TcpClient:
             print "Login fail, reason:", self.jdata.get("message")
             return False
 
-
     def logout(self):
         logout_msg = '{"action": "logout"}'
         self.send_json_and_recv(logout_msg)
@@ -77,7 +85,6 @@ class TcpClient:
             print "Logout success"
         else:
             print "Logout fail:", self.jdata.get("message")
-
 
     def broadcast(self, content=""):
         broadcast_msg = '{"action": "broadcast", "content": "%s"}' % content
@@ -90,13 +97,10 @@ class TcpClient:
             print "Broadcast fail, reason:", self.jdata.get("message")
             return False
 
-
     def get_online_user(self):
         get_msg = '{"action": "get_online_user"}'
         self.send_json_and_recv(get_msg)
-        if self.jdata.get("user"):
-            print self.jdata.get("user")
-
+        return self.jdata
 
     def start_query(self):
 
@@ -148,7 +152,6 @@ class TcpClient:
         jdata = json.loads(data)
         return jdata
 
-
     def send_json(self, message):
         """
         发送信息
@@ -159,7 +162,6 @@ class TcpClient:
         except Exception as e:
             print "send_json:", e
 
-
     def send_json_and_recv(self, message):
         try:
             #  print "Send: {}".format(message)
@@ -169,7 +171,6 @@ class TcpClient:
             print "Recv: ", self.jdata
         except Exception as e:
             print "send_json_and_recv:", e
-
 
     def finish(self):
         if self.isLogin and not self.is_recv_boardcast:
@@ -190,11 +191,9 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
             "chat": self.show_msg,
         }
 
-
     def finish(self):
         if self in connections:
             connections.remove(self)
-
 
     # 重载其基类BaseHTTPRequestHandler的成员函数handle_one_reques
     def handle_one_request(self):
@@ -255,7 +254,6 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
         except Exception as e:
             print "Error:{} / traceback:{}".format(e.message, traceback.format_exc())
 
-
     # 根据不同action交给不同的handler处理
     def handle_action(self, action_type):
         print "Receive action:[%s]" % action_type
@@ -274,11 +272,9 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
         else:
             return {"code": "UNKNOWN_AGENT", "message": "Your agent is rejected."}
 
-
     # 收取信息并显示
     def show_msg(self):
         pass
-
 
     # 发送消息
     def send_msg(self, content):
@@ -290,17 +286,17 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
         self.request.sendall(json.dumps(broadcast_msg))
 
 
-
-
 class ThreadedTCPServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
     pass
 
 
-def start_P2P_chat_TCP_server():
+# 启动服务器
+def start_P2P_chat_TCP_server(PORT=54321):
 
     HOST = "localhost"
-    PORT = 54321
     ADDR = (HOST, PORT)
+
+    print "P2P chat server port:", PORT
 
     SocketServer.TCPServer.allow_reuse_address = True
     server = ThreadedTCPServer(ADDR, ThreadedTCPRequestHandler)
