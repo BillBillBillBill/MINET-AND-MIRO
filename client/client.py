@@ -10,6 +10,9 @@ import SocketServer
 import traceback
 import uuid
 
+from PyQt5.QtWidgets import QTextBrowser
+
+
 # 检测端口是否被占用
 def isPortOpen(port):
     import telnetlib
@@ -192,11 +195,12 @@ class TcpClient:
 
 class P2P_chat_manager(object):
     P2P_chat_objects = {}
+    main_window = None
 
 
 class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
 
-    def setup(self, UI=None):
+    def setup(self):
         self.allow_action = {
             "handshake": self.handshake_handler,
             "chat": self.show_msg,
@@ -267,9 +271,9 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
         print "Receive action:[%s]" % action_type
 
         if action_type not in self.allow_action.keys():
-            return {"code": "UNKNOWN_METHOD", "message": "The action is unknown"}
+            self.request.sendall(json.dumps({"code": "UNKNOWN_METHOD", "message": "The action is unknown"}))
         else:
-            return self.allow_action[action_type]()
+            self.allow_action[action_type]()
 
     # 握手
     def handshake_handler(self):
@@ -279,10 +283,17 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
         nickname = self.jdata.get("nickname")
         secret_id = self.jdata.get("secret_id")
         if not all([host, port, nickname, secret_id]):
-            return {"code": "MORE_DATA_NEEDED", "message": "You must send host, port, nickname, secret_id"}
+            self.request.sendall(json.dumps({"code": "MORE_DATA_NEEDED", "message": "You must send host, port, nickname, secret_id"}))
         else:
-            # 建立对话
-            return {"message": "success"}
+            try:
+                if not P2P_chat_manager.P2P_chat_objects.get(secret_id):
+                    # 建立对话
+                    P2P_chat_manager.main_window.addTab_to_tabView_signal.emit(self.jdata)
+                    print "建立连接完成"
+                self.request.sendall(json.dumps({"message": "success"}))
+            except Exception, e:
+                print e
+                self.request.sendall(json.dumps({"message": "fail"}))
 
     # 收取信息并显示
     def show_msg(self):
@@ -340,9 +351,8 @@ class P2PChatClient:
         P2P_chat_manager.P2P_chat_objects[self.secret_id]['nickname'] = receiver_nickname
 
     def handshake(self):
-        handshake_msg = {"action": "handshake", "host": "%s", "port": "%s", "nickname": "%s", "secret_id": "%s"} % (self.host, self.port, self.self_nickname, self.secret_id)
-        handshake = json.dumps(handshake)
-        self.send_json_and_recv(handshake)
+        handshake_msg = u'{"action": "handshake", "host": "%s", "port": "%s", "nickname": "%s", "secret_id": "%s"}' % (self.host, self.port, self.self_nickname, self.secret_id)
+        self.send_json_and_recv(handshake_msg)
         if self.jdata.get("message") != "success":
             print "Handshake fail"
             self.client.close()
@@ -354,7 +364,6 @@ class P2PChatClient:
         try:
             self.send_json(broadcast_msg)
             print "Send message success"
-            self.UI.add_format_text_to_QTextBrowser()
             return True
         except Exception, e:
             print e
@@ -375,7 +384,7 @@ class P2PChatClient:
         try:
             #  print "Send: {}".format(message)
             self.client.sendall(message.encode("utf-8"))
-            response = self.client.recv(self.BUFSIZ)
+            response = self.client.recv(1024)
             self.jdata = json.loads(response)
             print "Recv: ", self.jdata
         except Exception as e:
