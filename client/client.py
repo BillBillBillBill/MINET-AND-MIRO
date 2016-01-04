@@ -210,10 +210,6 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
             "chat": self.show_msg,
         }
 
-    def finish(self):
-        # 断开连接
-        pass
-
     # 重载其基类BaseHTTPRequestHandler的成员函数handle_one_reques
     def handle_one_request(self):
         """Handle a single HTTP request.
@@ -306,7 +302,7 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
         P2P_chat_object = P2P_chat_manager.P2P_chat_objects.get(secret_id)
         if P2P_chat_object:
             QTextBrowserObject = P2P_chat_object.get("chat_tab")
-            jdata = {"content": content, "nickname": P2P_chat_object.get("nickname")}
+            jdata = {"content": content, "nickname": P2P_chat_object.get("nickname") if not self.jdata.get("nickname") else self.jdata.get("nickname")}
             P2P_chat_manager.main_window.add_format_text_to_QTextBrowser_signal.emit(jdata, QTextBrowserObject)
         else:
             print u"找不到该聊天"
@@ -391,6 +387,8 @@ class P2PChatClient:
 
     def finish(self):
         # 断开连接
+        quit_msg = u'{"action": "chat", "content": "用户断开连接", "nickname": "【系统消息】", "secret_id": "%s"}' % self.secret_id
+        self.send_json(quit_msg)
         self.client.close()
 
 #####################################

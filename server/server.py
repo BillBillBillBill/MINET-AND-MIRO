@@ -234,7 +234,7 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
             "time": now_time,
             "content": content,
             "user": self.user,
-            "nickname": r.get("user:" + self.user + ":nickname")
+            "nickname": r.get(u"user:" + self.user + u":nickname")
         }
         self.broadcast(broadcast_msg)
         return {"code": "BROADCAST_SUCCESS", "message": ""}
@@ -244,7 +244,7 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
         now_time = time.strftime('%Y/%m/%d %H:%M:%S', time.localtime(time.time()))
         broadcast_msg = {
             "time": now_time,
-            "content": u"用户%s进入聊天室\n" % r.get("user:" + self.user + ":nickname"),
+            "content": "用户" + r.get("user:" + self.user + ":nickname") + "进入聊天室\n",
             "user": self.user,
             "nickname": "【系统消息】"
         }
@@ -255,7 +255,7 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
         now_time = time.strftime('%Y/%m/%d %H:%M:%S', time.localtime(time.time()))
         broadcast_msg = {
             "time": now_time,
-            "content": u"用户%s退出聊天室\n" % r.get("user:" + self.user + ":nickname"),
+            "content": "用户" + r.get("user:" + self.user + ":nickname") + "退出聊天室\n",
             "user": self.user,
             "nickname": "【系统消息】"
         }

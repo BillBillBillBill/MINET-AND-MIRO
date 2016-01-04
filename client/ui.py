@@ -151,6 +151,9 @@ class MainWindow(QWidget):
         print "关闭client"
         self.recv_client.finish()
         print "关闭recv_client"
+        for secret_id in P2P_chat_manager.P2P_chat_objects:
+            P2P_chat_manager.P2P_chat_objects[secret_id]['client'].finish()
+        print "关闭p2p chat client"
 
     def __init__(self, parent=None):
         super(MainWindow, self).__init__(parent)
