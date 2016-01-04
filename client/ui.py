@@ -21,7 +21,8 @@ from client import TcpClient, start_P2P_chat_TCP_server, isPortOpen, P2PChatClie
 class UserDataBox(QWidget):
 
     def __init__(self, online_user_list=None, main_window=None):
-
+        super(UserDataBox, self).__init__()
+        self.setWindowFlags(Qt.Window | Qt.FramelessWindowHint)
         self.main_window = main_window
         # userDataJson = [
         #     ["user1", u"用户1", "127.0.0.1", "54321"],
@@ -35,11 +36,12 @@ class UserDataBox(QWidget):
             QDialog.__init__(self)
             userNum = len(online_user_list)
 
-            self.resize(450, 60+43*userNum)
+            self.resize(400, 110+45*userNum)
             self.setWindowTitle(u'在线用户列表')
 
             self.MyTable = QTableWidget(userNum, 4)
             self.MyTable.setHorizontalHeaderLabels(['用户名', '昵称', 'IP', '开放端口'])
+            self.MyTable.setVerticalHeaderLabels([])
 
             for index,userData in enumerate(online_user_list):
                 newItem = QTableWidgetItem(userData[0])
@@ -61,43 +63,80 @@ class UserDataBox(QWidget):
             self.MyTable.resizeColumnsToContents()   # 将列调整到跟内容大小相匹配
             self.MyTable.resizeRowsToContents()      # 将行大小调整到跟内容的大小相匹配
 
+            # 布局和样式
+            # 创建窗口部件
+            self.widget_frame = QLabel()
+            # 窗口标题
+            self.title = QLabel('双击可进行P2P聊天')
+            self.title.setAlignment(Qt.AlignCenter)
+
+            self.top_layout = QVBoxLayout()
+            self.top_layout.addWidget(self.title)
+            self.top_layout.addWidget(self.MyTable)
+            self.top_layout.setSpacing(10)
+
+            self.widget_frame.setLayout(self.top_layout)
+
+            self.layout_fram = QGridLayout()
+            self.layout_fram.addWidget(self.widget_frame, 0, 0, 1, 1)
+            self.layout_fram.setContentsMargins(0, 0, 0, 0)
+            self.setLayout(self.top_layout)
+
+            self.widget_frame.setObjectName('frame')
+            self.title.setObjectName('title')
+            self.setStyleSheet(
+            '#frame{'
+                'background-color: #333333;'
+            '}'
+            '#title{'
+                'color: white;'
+                'font-size: 17pt;'
+            '}'
+            'QWidget {'
+                'background-color: #333333;'
+                'color: #fffff8;'
+            '}'
+            'QHeaderView::section {'
+                'background-color: #646464;'
+                'padding: 4px;'
+                'border: 1px solid #fffff8;'
+                'font-size: 16pt;'
+            '}'
+            'QTableWidget {'
+                'gridline-color: #fffff8;'
+                'font-size: 14pt;'
+            '}'
+            'QTableWidget QTableCornerButton::section {'
+                'background-color: #646464;'
+                'border: 1px solid #fffff8;'
+            '}'
+            )
+
             # 绑定信号 双击表格项时开始p2p聊天
             self.MyTable.itemDoubleClicked.connect(self.create_P2P_chat_to_user)
 
-            layout = QHBoxLayout()
-            layout.addWidget(self.MyTable)
-            self.setLayout(layout)
 
     def create_P2P_chat_to_user(self, item):
         # 获取所在行单元格的内容
         def getItemContent(item, index):
             return self.MyTable.item(item.row(), index).text()
+
         receiver_nickname = getItemContent(item, 1)
-
         p2p_server_host, p2p_server_port = getItemContent(item, 2), getItemContent(item, 3)
-
         jdata = {
             "host": p2p_server_host,
             "port": p2p_server_port,
             "nickname": receiver_nickname,
             "need_handshake": True
         }
-
+        # 检查是否已经存在与该用户的对话 如有直接切换过去 没有就创建这个tab
+        for secret_id in P2P_chat_manager.P2P_chat_objects:
+            P2P_chat_object = P2P_chat_manager.P2P_chat_objects[secret_id]
+            if P2P_chat_object['nickname'] == receiver_nickname:
+                # 切换到该tabview
+                self.main_window.tabView.setCurrentWidget(P2P_chat_object['chat_tab'])
+                return
         self.main_window.addTab_to_tabView_signal.emit(jdata)
-
-        # # 创建新的tab
-        # chat_tab = QTextBrowser()
-        # self.main_window.tabView.addTab(chat_tab, receiver_nickname)
-        #
-        # # 创建chat client
-        # P2P_chat_client = P2PChatClient(p2p_server_host, p2p_server_port, receiver_nickname, self.main_window.client.nickname, self.main_window, chat_tab)
-        # P2P_chat_manager.P2P_chat_objects[P2P_chat_client.secret_id]['chat_tab'] = chat_tab
-        # P2P_chat_manager.P2P_chat_objects[P2P_chat_client.secret_id]['client'] = P2P_chat_client
-        # # 把widget名称改成secret id
-        # chat_tab.setObjectName(P2P_chat_client.secret_id)
-        # # 切换到该tabview
-        # self.main_window.tabView.setCurrentWidget(chat_tab)
-
 
 
 class MainWindow(QWidget):
@@ -416,6 +455,8 @@ class MainWindow(QWidget):
         try:
             assert self.client.login(username, password)
             assert self.recv_client.login(username, password)
+            if self.client.nickname:
+                self.setWindowTitle(u"MINET - 用户" + self.client.nickname)
             QMessageBox.information(
                 self,
                 "提示",
@@ -496,7 +537,7 @@ class MainWindow(QWidget):
             P2P_chat_client.handshake(self.self_p2p_server_host, self.self_p2p_server_port)
 
         # 在界面提示连接成功
-        jdata = {"content": u"与%s建立P2P连接完成" % nickname, "nickname": u"【系统消息】"}
+        jdata = {"content": u"与%s建立P2P连接完成\n" % nickname, "nickname": u"【系统消息】"}
         P2P_chat_manager.main_window.add_format_text_to_QTextBrowser_signal.emit(jdata, chat_tab)
 
     def send_msg(self):

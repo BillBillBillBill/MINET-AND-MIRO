@@ -210,7 +210,6 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
                 print "Error:", e.message,traceback.format_exc()
                 return {"code": "SERVER_ERROR", "message": "Server Error"}
 
-
     # 用户登出
     @authenticated
     def logout_handler(self):

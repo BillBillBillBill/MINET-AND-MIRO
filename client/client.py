@@ -103,7 +103,7 @@ class TcpClient:
     def broadcast(self, content=""):
         broadcast_msg = '{"action": "broadcast", "content": "%s"}' % content
         try:
-            self.send_json(broadcast_msg)
+            self.send_json_and_recv(broadcast_msg)
             print "Broadcast success"
             return True
         except Exception, e:
@@ -114,6 +114,9 @@ class TcpClient:
     def get_online_user(self):
         get_msg = '{"action": "get_online_user"}'
         self.send_json_and_recv(get_msg)
+        # 防黏包
+        # if isinstance(self.jdata, dict):
+        #     self.receive_one_msg()
         return self.jdata
 
     def start_query(self):
