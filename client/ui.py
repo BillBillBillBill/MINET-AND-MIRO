@@ -142,6 +142,7 @@ class UserDataBox(QWidget):
 class MainWindow(QWidget):
     # 声明信号 不能放init中
     add_format_text_to_QTextBrowser_signal = pyqtSignal(dict, QTextBrowser)
+    close_QTextBrowser_signal = pyqtSignal(str, QTextBrowser)
     addTab_to_tabView_signal = pyqtSignal(dict)
 
     def closeEvent(self, QCloseEvent):
@@ -380,6 +381,7 @@ class MainWindow(QWidget):
         # 绑定信号
         self.add_format_text_to_QTextBrowser_signal.connect(self.add_format_text_to_QTextBrowser)
         self.addTab_to_tabView_signal.connect(self.addTab_to_tabView)
+        self.close_QTextBrowser_signal.connect(self.close_QTextBrowser)
 
         # 线程间共享数据队列
         queue_size = 10000
@@ -448,7 +450,6 @@ class MainWindow(QWidget):
                 "提示",
                 "查询失败TAT",
                 QMessageBox.Yes)
-            pass
 
     def login(self):
         username = self.username_edit.text()
@@ -514,6 +515,18 @@ class MainWindow(QWidget):
         QTextBrowserObject.setText("%s%s"%(QTextBrowserObject.toPlainText(), msg))
         QTextBrowserObject.moveCursor(QTextBrowserObject.textCursor().End)
 
+    # 在tabview中关闭这个tab（会话结束）
+    def close_QTextBrowser(self, secret_id, QTextBrowserObject):
+        QMessageBox.information(
+                self,
+                "提示",
+                u"%s断开连接，会话结束！" % P2P_chat_manager.P2P_chat_objects[secret_id].get("nickname"),
+                QMessageBox.Yes)
+        tab_number = P2P_chat_manager.P2P_chat_objects[secret_id].get("tab_number")
+        if tab_number:
+            self.tabView.removeTab(tab_number)
+        P2P_chat_manager.P2P_chat_objects.pop(secret_id)
+
     # 往tabview中添加一个tab 并建立P2P_chat_client
     def addTab_to_tabView(self, jdata):
         host = jdata.get("host")
@@ -522,7 +535,7 @@ class MainWindow(QWidget):
         secret_id = jdata.get("secret_id")
         # 创建新的tab
         chat_tab = QTextBrowser()
-        self.tabView.addTab(chat_tab, nickname)
+        tab_number = self.tabView.addTab(chat_tab, nickname)
         # 创建chat client 没有secret id 构造时会随机生成一个
         if secret_id:
             P2P_chat_client = P2PChatClient(host, port, nickname, self.client.nickname, self, chat_tab, secret_id)
@@ -531,6 +544,7 @@ class MainWindow(QWidget):
             secret_id = P2P_chat_client.secret_id
         P2P_chat_manager.P2P_chat_objects[secret_id]['chat_tab'] = chat_tab
         P2P_chat_manager.P2P_chat_objects[secret_id]['client'] = P2P_chat_client
+        P2P_chat_manager.P2P_chat_objects[secret_id]['tab_number'] = tab_number
         # 把widget名称改成secret id
         chat_tab.setObjectName(secret_id)
         # 切换到该tabview

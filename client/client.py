@@ -302,8 +302,11 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
         P2P_chat_object = P2P_chat_manager.P2P_chat_objects.get(secret_id)
         if P2P_chat_object:
             QTextBrowserObject = P2P_chat_object.get("chat_tab")
-            jdata = {"content": content, "nickname": P2P_chat_object.get("nickname") if not self.jdata.get("nickname") else self.jdata.get("nickname")}
+            jdata = {"content": content, "nickname": u"【系统消息】" if not self.jdata.get("special") else P2P_chat_object.get("nickname")}
             P2P_chat_manager.main_window.add_format_text_to_QTextBrowser_signal.emit(jdata, QTextBrowserObject)
+            if self.jdata.get("special") == "quit":
+                print "断开连接，关闭标签"
+                P2P_chat_manager.main_window.close_QTextBrowser_signal.emit(secret_id, QTextBrowserObject)
         else:
             print u"找不到该聊天"
 
@@ -387,7 +390,7 @@ class P2PChatClient:
 
     def finish(self):
         # 断开连接
-        quit_msg = u'{"action": "chat", "content": "用户断开连接", "nickname": "【系统消息】", "secret_id": "%s"}' % self.secret_id
+        quit_msg = u'{"action": "chat", "content": "用户断开连接", "special": "quit", "secret_id": "%s"}' % self.secret_id
         self.send_json(quit_msg)
         self.client.close()
 
