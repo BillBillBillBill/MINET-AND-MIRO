@@ -1,13 +1,15 @@
 #coding:utf-8
 import ConfigParser
+import os
 
 from PyQt5.QtWidgets import (
     QApplication, QMessageBox, QWidget, QDialog, QLabel, QLineEdit,
-    QTextEdit, QRadioButton, QPushButton, QTextBrowser,QTabWidget,
-    QHBoxLayout, QVBoxLayout, QGridLayout, QTableWidget, QTableWidgetItem)
+    QTextEdit, QRadioButton, QPushButton, QTextBrowser,QTabWidget, QFileDialog,
+    QHBoxLayout, QVBoxLayout, QGridLayout, QTableWidget, QTableWidgetItem, QToolButton)
 
 #from PyQt5.QtCore import *
 from PyQt5.QtCore import pyqtSignal, Qt, QTranslator
+from PyQt5.QtGui import QFont
 from threading import Thread
 from Queue import Queue
 from datetime import datetime
@@ -138,6 +140,7 @@ class UserDataBox(QWidget):
 class MainWindow(QWidget):
     # 声明信号 不能放init中
     add_format_text_to_QTextBrowser_signal = pyqtSignal(dict, QTextBrowser)
+    add_format_image_to_QTextBrowser_signal = pyqtSignal(dict, QTextBrowser)
     close_QTextBrowser_signal = pyqtSignal(str, QTextBrowser)
     addTab_to_tabView_signal = pyqtSignal(dict)
 
@@ -158,6 +161,7 @@ class MainWindow(QWidget):
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setWindowTitle("MINET")
         self.resize(500, 300)
+        self.font_size = 15
 
         # 创建窗口部件
         self.widget_frame = QLabel()
@@ -192,13 +196,23 @@ class MainWindow(QWidget):
         self.group_chat = QTextBrowser()
         # self.P2P_chat = QTextBrowser()
         self.tabView.addTab(self.group_chat, '群聊')
-        # self.tabView.addTab(self.P2P_chat, 'P2P聊天')
+
+        self.file_line_edit = QLineEdit()
+        self.select_file_btn = QToolButton()
+        self.select_file_btn.setText('选择图片/文件')
+        self.send_file_btn = QToolButton()
+        self.send_file_btn.setText('发送')
+
+        self.adjust_font_lab = QLabel('调整文字大小：')
+        self.font_smaller_btn = QToolButton()
+        self.font_smaller_btn.setText('缩小')
+        self.font_bigger_btn = QToolButton()
+        self.font_bigger_btn.setText('增大')
 
         self.chat_msg_edit = QTextEdit()
         self.send_msg_btn = QPushButton('发送')
         self.chat_msg_edit.setMaximumHeight(80)
         self.chat_msg_edit.setPlaceholderText("有什么想说的？")
-
 
         # 布局
         # 标题部分
@@ -236,10 +250,24 @@ class MainWindow(QWidget):
         self.login_widget = QLabel()
         self.login_widget.setLayout(self.login_layout)
 
+        # 聊天部分工具
+
+        self.tool_layout = QHBoxLayout()
+        self.tool_layout.addWidget(self.select_file_btn)
+        self.tool_layout.addWidget(self.file_line_edit)
+        self.tool_layout.addWidget(self.send_file_btn)
+        self.tool_layout.addWidget(self.adjust_font_lab)
+        self.tool_layout.addWidget(self.font_smaller_btn)
+        self.tool_layout.addWidget(self.font_bigger_btn)
+        self.tool_widget = QLabel()
+        self.tool_widget.setFixedHeight(50)
+        self.tool_widget.setLayout(self.tool_layout)
+
         # 聊天部分widget
         self.chat_layout = QVBoxLayout()
         self.chat_layout.addWidget(self.show_online_user_btn)
         self.chat_layout.addWidget(self.tabView)
+        self.chat_layout.addWidget(self.tool_widget)
         self.chat_layout.addWidget(self.chat_msg_edit)
         self.chat_layout.addWidget(self.send_msg_btn)
 
@@ -271,12 +299,89 @@ class MainWindow(QWidget):
         self.password_lab.setObjectName('password_lab')
         self.nickname_lab.setObjectName('nickname_lab')
 
+        # 设置风格
+        self.set_style('/home/bill/Desktop/MAC自带壁纸/1226016,106.jpg')
+
+        # 设置字体
+        self.set_QTextBrowser_font_size(self.group_chat, 15)
+
+        self.login_btn.setShortcut(Qt.Key_Return)
+
+        # 关联 信号/槽
+        self.login_btn.clicked.connect(self.login)
+        self.register_btn.clicked.connect(self.register)
+        self.send_msg_btn.clicked.connect(self.send_msg)
+        self.chat_msg_edit.textChanged.connect(self.detect_return)
+        self.type_select_register.toggled.connect(self.toggle_register)
+        self.type_select_login.toggled.connect(self.toggle_login)
+        self.show_online_user_btn.clicked.connect(self.show_online_user)
+        self.select_file_btn.clicked.connect(self.choose_file)
+        self.font_smaller_btn.clicked.connect(self.font_smaller)
+        self.font_bigger_btn.clicked.connect(self.font_bigger)
+        self.send_file_btn.clicked.connect(self.send_file)
+
+        # 绑定信号
+        self.add_format_text_to_QTextBrowser_signal.connect(self.add_format_text_to_QTextBrowser)
+        self.add_format_image_to_QTextBrowser_signal.connect(self.add_format_image_to_QTextBrowser)
+        self.addTab_to_tabView_signal.connect(self.addTab_to_tabView)
+        self.close_QTextBrowser_signal.connect(self.close_QTextBrowser)
+
+        # 线程间共享数据队列
+        queue_size = 10000
+        self.__queue_result = Queue(queue_size)
+        self.__queue_error = Queue(queue_size)
+
+        # 强制结束子线程
+        self.__thread_killer = False
+
+        self.chat_widget.hide()
+        self.type_select_login.click()
+        # self.chat_layout_widgets = [self.tabView, self.chat_msg_edit, self.send_msg_btn]
+        # self.login_layout_widgets = [self.login_btn_fram, self.login_input_fram]
+
+        # 启动p2p聊天服务器
+        # 从配置文件中读取host, port
+        cf = ConfigParser.ConfigParser()
+        cf.read("server.conf")
+        self.self_p2p_server_host = cf.get("P2P_server", "host")
+        self.self_p2p_server_port = cf.getint("P2P_server", "port")
+        # 寻找可用端口
+        while isPortOpen(self.self_p2p_server_host, self.self_p2p_server_port):
+            self.self_p2p_server_port += 1
+        self.P2P_chat_TCP_server_thread = Thread(target=start_P2P_chat_TCP_server, args=(self.self_p2p_server_host,self.self_p2p_server_port,self))
+        self.P2P_chat_TCP_server_thread.start()
+
+        # 启动群聊客户端
+        self.client = TcpClient(self)
+        self.recv_client = TcpClient(self, is_recv_boardcast=True)
+        self.client.handshake(self.self_p2p_server_host, self.self_p2p_server_port)
+        self.recv_client.handshake(self.self_p2p_server_host, self.self_p2p_server_port)
+
+        P2P_chat_manager.main_window = self
+
+    def set_QTextBrowser_font_size(self, QTextBrowser, size=15):
+        font = QFont()
+        font.setFamily("新宋体")
+        font.setPointSize(int(size))
+        font.setBold(True)
+        font.setWeight(75)
+        QTextBrowser.setFont(font)
+
+    def font_smaller(self):
+        self.font_size -= 1
+        self.set_QTextBrowser_font_size(self.tabView.currentWidget(), self.font_size)
+
+    def font_bigger(self):
+        self.font_size += 1
+        self.set_QTextBrowser_font_size(self.tabView.currentWidget(), self.font_size)
+
+    def set_style(self, background_img_name="Images/bg"):
         self.setStyleSheet(
-            '#username_lab, #password_lab, #nickname_lab{'
+            'QLabel{'
                 'color: white;'
             '}'
             '#frame{'
-                'border-image: url(Images/bg);'
+                'border-image: url(' + background_img_name + ');'
             '}'
             '#title{'
                 'color: white;'
@@ -363,54 +468,22 @@ class MainWindow(QWidget):
             '}'
             )
 
-        self.login_btn.setShortcut(Qt.Key_Return)
+    # 选择打开文件工具
+    def choose_file(self):
+        path = QFileDialog.getOpenFileName()
+        if path[0] != '':
+            self.file_line_edit.setText(path[0])
 
-        # 关联 信号/槽
-        self.login_btn.clicked.connect(self.login)
-        self.register_btn.clicked.connect(self.register)
-        self.send_msg_btn.clicked.connect(self.send_msg)
-        self.chat_msg_edit.textChanged.connect(self.detect_return)
-        self.type_select_register.toggled.connect(self.toggle_register)
-        self.type_select_login.toggled.connect(self.toggle_login)
-        self.show_online_user_btn.clicked.connect(self.show_online_user)
-
-        # 绑定信号
-        self.add_format_text_to_QTextBrowser_signal.connect(self.add_format_text_to_QTextBrowser)
-        self.addTab_to_tabView_signal.connect(self.addTab_to_tabView)
-        self.close_QTextBrowser_signal.connect(self.close_QTextBrowser)
-
-        # 线程间共享数据队列
-        queue_size = 10000
-        self.__queue_result = Queue(queue_size)
-        self.__queue_error = Queue(queue_size)
-
-        # 强制结束子线程
-        self.__thread_killer = False
-
-        self.chat_widget.hide()
-        self.type_select_login.click()
-        # self.chat_layout_widgets = [self.tabView, self.chat_msg_edit, self.send_msg_btn]
-        # self.login_layout_widgets = [self.login_btn_fram, self.login_input_fram]
-
-        # 启动p2p聊天服务器
-        # 从配置文件中读取host, port
-        cf = ConfigParser.ConfigParser()
-        cf.read("server.conf")
-        self.self_p2p_server_host = cf.get("P2P_server", "host")
-        self.self_p2p_server_port = cf.getint("P2P_server", "port")
-        # 寻找可用端口
-        while isPortOpen(self.self_p2p_server_port):
-            self.self_p2p_server_port += 1
-        self.P2P_chat_TCP_server_thread = Thread(target=start_P2P_chat_TCP_server, args=(self.self_p2p_server_host,self.self_p2p_server_port,self))
-        self.P2P_chat_TCP_server_thread.start()
-
-        # 启动群聊客户端
-        self.client = TcpClient(self)
-        self.recv_client = TcpClient(self, is_recv_boardcast=True)
-        self.client.handshake(self.self_p2p_server_host, self.self_p2p_server_port)
-        self.recv_client.handshake(self.self_p2p_server_host, self.self_p2p_server_port)
-
-        P2P_chat_manager.main_window = self
+    # 发送文件/图片
+    def send_file(self):
+        filepath = self.file_line_edit.text()
+        if os.path.isfile(filepath):
+            print "发送文件/图片:", filepath
+            if filepath.endswith("png") or filepath.endswith("jpg") or filepath.endswith("jpeg") or filepath.endswith("gif"):
+                self.client.send_file(filepath, "image")
+            else:
+                self.client.send_file(filepath)
+            self.file_line_edit.setText("")
 
     # 检测回车，检测到就发送
     def detect_return(self):
@@ -511,7 +584,19 @@ class MainWindow(QWidget):
         text = jdata.get("content", "")
         nickname = jdata.get("nickname", "")
         msg = "%s %s\n%s\n" % (nickname, time, text)
-        QTextBrowserObject.setText("%s%s"%(QTextBrowserObject.toPlainText(), msg))
+        QTextBrowserObject.insertPlainText(msg)
+        # QTextBrowserObject.setText("%s%s"%(QTextBrowserObject.toPlainText(), msg))
+        QTextBrowserObject.moveCursor(QTextBrowserObject.textCursor().End)
+
+    # 往QTextBrowser中添加格式化的图片
+    def add_format_image_to_QTextBrowser(self, jdata, QTextBrowserObject):
+        time = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+        nickname = jdata.get("nickname", "")
+        store_filename = jdata.get("store_filename")
+        msg_head = "%s %s\n" % (nickname, time)
+        QTextBrowserObject.insertPlainText(msg_head)
+        QTextBrowserObject.insertHtml('<img src="%s"></img>' % store_filename)
+        QTextBrowserObject.insertPlainText("\n")
         QTextBrowserObject.moveCursor(QTextBrowserObject.textCursor().End)
 
     # 在tabview中关闭这个tab（会话结束）
@@ -534,6 +619,7 @@ class MainWindow(QWidget):
         secret_id = jdata.get("secret_id")
         # 创建新的tab
         chat_tab = QTextBrowser()
+        self.set_QTextBrowser_font_size(chat_tab)
         tab_number = self.tabView.addTab(chat_tab, nickname)
         # 创建chat client 没有secret id 构造时会随机生成一个
         if secret_id:
@@ -584,7 +670,7 @@ class MainWindow(QWidget):
                 jdata = {"content": raw_content, "nickname": u"自己"}
                 objs = P2P_chat_manager.P2P_chat_objects
                 for secret_id in objs:
-                    print objs[secret_id]
+                    # print objs[secret_id]
                     if secret_id == currentWidgetName:
                         self.add_format_text_to_QTextBrowser(jdata, objs[secret_id].get('chat_tab'))
                         objs[secret_id].get('sender').chat(content)
@@ -603,10 +689,26 @@ class MainWindow(QWidget):
                     print "停止接收信息"
                     return True
                 jdata = self.recv_client.receive_one_msg()
-                if jdata.keys() == ['content', 'nickname', 'user', 'time']:
+                # 收到广播消息
+                if jdata.get("action") == "broadcast":
                     #self.add_format_text_to_group_chat(jdata['content'])
                     self.add_format_text_to_QTextBrowser_signal.emit(jdata, self.group_chat)
                     print jdata['nickname'], "发来消息:", jdata['content']
+                # 收到文件广播
+                if jdata.get("action") == "broadcast_file":
+                    # 开始接收文件
+                    store_filename = self.recv_client.recv_file(jdata.get('filename'), jdata.get('file_type'))
+                    jdata['store_filename'] = store_filename
+                    # 如果是图片 显示出来
+                    if jdata.get("file_type") == 'image':
+                        print "接收到图片"
+                        self.add_format_image_to_QTextBrowser_signal.emit(jdata, self.group_chat)
+                    else:
+                        print "接收到文件"
+                        jdata['content'] = u"已接收%s发来的文件，保存路径为:%s\n" % (jdata['nickname'], store_filename)
+                        jdata['nickname'] = u"【系统消息】"
+                        self.add_format_text_to_QTextBrowser_signal.emit(jdata, self.group_chat)
+
         self.recv_msg_thread = Thread(target=start)
         self.recv_msg_thread.start()
         return True

@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 #coding:utf-8
 import ConfigParser
+import os
 import socket
 import json
 
@@ -11,10 +12,13 @@ import uuid
 
 
 # 检测端口是否被占用
-def isPortOpen(port):
+import time
+
+
+def isPortOpen(host, port):
     import telnetlib
     try:
-        test = telnetlib.Telnet('localhost', port)
+        test = telnetlib.Telnet(host, port)
         test.close()
         return True
     except:
@@ -103,10 +107,47 @@ class TcpClient:
         else:
             print "Logout fail:", self.jdata.get("message")
 
+    def send_file(self, filename, file_type="file"):
+        get_msg = '{"action": "send_file", "filename": "%s", "file_type": "%s"}' % (filename.split("/")[-1], file_type)
+        self.send_json(get_msg)
+        print "开始发送文件.."
+        with open(filename, 'rb') as f:
+            while True:
+                data = f.read(4096)
+                if not data:
+                    break
+                self.client.sendall(data)
+            f.close()
+            time.sleep(0.5)
+            self.client.sendall('EOF')
+            print "发送文件完成"
+
+    def recv_file(self, filename, file_type="file"):
+        if not os.path.isdir(self.nickname):
+            os.mkdir(self.nickname)
+            os.mkdir(self.nickname + '/recv_images')
+            os.mkdir(self.nickname + '/recv_files')
+        user_image_dir = self.nickname + '/recv_images/'
+        user_file_dir = self.nickname + '/recv_files/'
+        if file_type == "image":
+            store_filename = user_image_dir + filename
+        else:
+            store_filename = user_file_dir + filename
+        print "开始接收文件"
+        with open(store_filename, 'wb') as f:
+            while True:
+                data = self.client.recv(4096)
+                if data == 'EOF':
+                    print "接收文件完成"
+                    break
+                f.write(data)
+            f.close()
+        return store_filename
+
     def broadcast(self, content=""):
         broadcast_msg = '{"action": "broadcast", "content": "%s"}' % content
         try:
-            self.send_json_and_recv(broadcast_msg)
+            self.send_json(broadcast_msg)
             print "Broadcast success"
             return True
         except Exception, e:
@@ -169,8 +210,8 @@ class TcpClient:
         """
         data = self.client.recv(self.BUFSIZ)
         print "收到信息：", data
-        jdata = json.loads(data)
-        return jdata
+        self.jdata = json.loads(data)
+        return self.jdata
 
     def send_json(self, message):
         """
@@ -305,7 +346,7 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
         P2P_chat_object = P2P_chat_manager.P2P_chat_objects.get(secret_id)
         if P2P_chat_object:
             QTextBrowserObject = P2P_chat_object.get("chat_tab")
-            jdata = {"content": content, "nickname": u"【系统消息】" if not self.jdata.get("special") else P2P_chat_object.get("nickname")}
+            jdata = {"content": content, "nickname": u"【系统消息】" if self.jdata.get("special") else P2P_chat_object.get("nickname")}
             P2P_chat_manager.main_window.add_format_text_to_QTextBrowser_signal.emit(jdata, QTextBrowserObject)
             if self.jdata.get("special") == "quit":
                 print "断开连接，关闭标签"

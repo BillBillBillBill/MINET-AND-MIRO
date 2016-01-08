@@ -13,10 +13,10 @@ from conn import r
 
 
 # 检测端口是否被占用
-def isPortOpen(port):
+def isPortOpen(host, port):
     import telnetlib
     try:
-        test = telnetlib.Telnet('localhost', port)
+        test = telnetlib.Telnet(host, port)
         test.close()
         return True
     except:
@@ -54,6 +54,7 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
             "show_info": self.show_info,
             "broadcast": self.broadcast_handler,
             "get_online_user": self.get_user_info,
+            "send_file": self.send_file_handler
         }
 
     def finish(self):
@@ -127,10 +128,61 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
                 except Exception as e:
                     print "Error:{} / Receive data:{} / traceback:{}".format(e.message, data, traceback.format_exc())
                     response = '{"code":"JSON_REQUIRE","message":"Please send json format"}'
-                self.request.sendall(response)
+                if response and response != 'null':
+                    self.request.sendall(response)
         except Exception as e:
             print "Error:{} / traceback:{}".format(e.message, traceback.format_exc())
 
+    # 接收文件
+    @authenticated
+    def send_file_handler(self):
+        filename = self.jdata.get("filename")
+        file_type = self.jdata.get("file_type")
+        if file_type == "image":
+            store_filepath = 'recv_images/' + filename
+        else:
+            store_filepath = 'recv_files/' + filename
+        print "开始接收文件"
+        with open(store_filepath, 'wb') as f:
+            while True:
+                data = self.request.recv(4096)
+                if data == 'EOF':
+                    print "接收文件完成"
+                    break
+                f.write(data)
+            f.close()
+        print "开始广播图片/文件"
+        self.broadcast_file(store_filepath, filename, file_type)
+        print "广播图片/文件完成"
+
+    def broadcast_file(self, store_filepath, filename, file_type):
+        now_time = time.strftime('%Y/%m/%d %H:%M:%S', time.localtime(time.time()))
+        broadcast_msg = {
+            "action": "broadcast_file",
+            "time": now_time,
+            "user": self.user,
+            "nickname": r.get(u"user:" + self.user + u":nickname"),
+            "filename": filename,
+            "file_type": file_type,
+        }
+        # 向所有在线用户发送该消息
+        for conn in recv_connections:
+            if conn.get_user() != self.user:
+                print "向{}发送消息".format(conn.get_user())
+                conn.request.sendall(json.dumps(broadcast_msg))
+                time.sleep(0.2)
+                print "开始发送文件.."
+                # 向所有在线用户发送该文件
+                with open(store_filepath, 'rb') as f:
+                    while True:
+                        data = f.read(4096)
+                        if not data:
+                            break
+                        conn.request.sendall(data)
+                    f.close()
+                    time.sleep(0.1)
+                    conn.request.sendall('EOF')
+                    print "发送文件完成"
 
     # 根据不同action交给不同的handler处理
     def handle_action(self, action_type):
@@ -228,21 +280,23 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
         if not content:
             content = self.jdata.get("content")
         if not content:
-            return {"code": "BROADCAST_FAIL", "message": "content length must > 0"}
+            print {"code": "BROADCAST_FAIL", "message": "content length must > 0"}
         now_time = time.strftime('%Y/%m/%d %H:%M:%S', time.localtime(time.time()))
         broadcast_msg = {
+            "action": "broadcast",
             "time": now_time,
             "content": content,
             "user": self.user,
             "nickname": r.get(u"user:" + self.user + u":nickname")
         }
         self.broadcast(broadcast_msg)
-        return {"code": "BROADCAST_SUCCESS", "message": ""}
+        print {"code": "BROADCAST_SUCCESS", "message": ""}
 
 
     def broadcast_login(self):
         now_time = time.strftime('%Y/%m/%d %H:%M:%S', time.localtime(time.time()))
         broadcast_msg = {
+            "action": "broadcast",
             "time": now_time,
             "content": "用户" + r.get("user:" + self.user + ":nickname") + "进入聊天室\n",
             "user": self.user,
@@ -254,6 +308,7 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
     def broadcast_logout(self):
         now_time = time.strftime('%Y/%m/%d %H:%M:%S', time.localtime(time.time()))
         broadcast_msg = {
+            "action": "broadcast",
             "time": now_time,
             "content": "用户" + r.get("user:" + self.user + ":nickname") + "退出聊天室\n",
             "user": self.user,
@@ -278,7 +333,7 @@ def start_MIRO(host="localhost", port=12345):
     # Port 0 means to select an arbitrary unused port
 
     # 寻找可用端口
-    while isPortOpen(port):
+    while isPortOpen(host, port):
         port += 1
     BUFSIZ = 1024
     ADDR = (host, port)
