@@ -246,12 +246,14 @@ class P2P_chat_manager(object):
     main_window = None
 
 
+# 负责接收信息
 class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
 
     def setup(self):
         self.allow_action = {
             "handshake": self.handshake_handler,
             "chat": self.show_msg,
+            "send_file": self.send_file_handler
         }
 
     # 重载其基类BaseHTTPRequestHandler的成员函数handle_one_reques
@@ -319,6 +321,47 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
         else:
             self.allow_action[action_type]()
 
+    # 接收文件
+    def send_file_handler(self):
+        filename = self.jdata.get("filename")
+        file_type = self.jdata.get("file_type")
+        secret_id = self.jdata.get("secret_id")
+        # 自身昵称
+        nickname = P2P_chat_manager.main_window.nickname
+        if not os.path.isdir(nickname):
+            os.mkdir(nickname)
+            os.mkdir(nickname + '/recv_images')
+            os.mkdir(nickname + '/recv_files')
+        user_image_dir = nickname + '/recv_images/'
+        user_file_dir = nickname + '/recv_files/'
+        if file_type == "image":
+            store_filename = user_image_dir + filename
+        else:
+            store_filename = user_file_dir + filename
+        print "开始接收图片/文件"
+        with open(store_filename, 'wb') as f:
+            while True:
+                data = self.request.recv(4096)
+                if data == 'EOF':
+                    print "接收图片/文件完成"
+                    P2P_chat_object = P2P_chat_manager.P2P_chat_objects.get(secret_id)
+                    if P2P_chat_object:
+                        QTextBrowserObject = P2P_chat_object.get("chat_tab")
+                        if file_type == "image":
+                            jdata = {"store_filename": store_filename, "nickname": P2P_chat_object.get("nickname")}
+                            P2P_chat_manager.main_window.add_format_image_to_QTextBrowser_signal.emit(jdata, QTextBrowserObject)
+                        else:
+                            jdata = {
+                                "nickname": u"【系统消息】",
+                                "content": u"已接收%s发来的文件，保存路径为:%s\n" % (P2P_chat_object.get("nickname"), store_filename)
+                            }
+                            P2P_chat_manager.main_window.add_format_text_to_QTextBrowser_signal.emit(jdata, QTextBrowserObject)
+                    else:
+                        print u"找不到该聊天"
+                    break
+                f.write(data)
+            f.close()
+
     # 握手
     def handshake_handler(self):
         print u"开始建立连接"
@@ -373,6 +416,7 @@ def start_P2P_chat_TCP_server(HOST="localhost", PORT=54321, UI=None):
     server.serve_forever()
 
 
+# 负责发送
 class P2PChatClient:
 
     def __init__(self, host, port, receiver_nickname, self_nickname, UI=None, chat_tab=None, secret_id=None):
@@ -387,7 +431,7 @@ class P2PChatClient:
         self.jdata = {}
         self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.client.connect(self.ADDR)
-        self.allow_action = ["handshake", "chat"]
+        self.allow_action = ["handshake", "chat", "send_file"]
         P2P_chat_manager.P2P_chat_objects[self.secret_id] = {}
         P2P_chat_manager.P2P_chat_objects[self.secret_id]['sender'] = self
         P2P_chat_manager.P2P_chat_objects[self.secret_id]['nickname'] = receiver_nickname
@@ -411,6 +455,22 @@ class P2PChatClient:
             print e
             print "Send message fail, reason:", self.jdata.get("message")
             return False
+
+    def send_file(self, filename, file_type="file"):
+        get_msg = '{"action": "send_file", "filename": "%s", "file_type": "%s", "secret_id": "%s"}' % (filename.split("/")[-1], file_type, self.secret_id)
+        self.send_json(get_msg)
+        time.sleep(0.1)
+        print "开始发送文件.."
+        with open(filename, 'rb') as f:
+            while True:
+                data = f.read(4096)
+                if not data:
+                    break
+                self.client.sendall(data)
+            f.close()
+            time.sleep(0.1)
+            self.client.sendall('EOF')
+            print "发送文件完成"
 
     def send_json(self, message):
         """

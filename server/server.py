@@ -170,7 +170,7 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
             if conn.get_user() != self.user:
                 print "向{}发送消息".format(conn.get_user())
                 conn.request.sendall(json.dumps(broadcast_msg))
-                time.sleep(0.2)
+                time.sleep(0.1)
                 print "开始发送文件.."
                 # 向所有在线用户发送该文件
                 with open(store_filepath, 'rb') as f:

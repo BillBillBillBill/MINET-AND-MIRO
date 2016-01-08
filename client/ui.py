@@ -163,6 +163,8 @@ class MainWindow(QWidget):
         self.resize(500, 300)
         self.font_size = 15
 
+        self.nickname = ""
+
         # 创建窗口部件
         self.widget_frame = QLabel()
 
@@ -188,6 +190,11 @@ class MainWindow(QWidget):
         self.register_btn = QPushButton('注册')
         self.login_btn.setFixedWidth(100)
         self.register_btn.setFixedWidth(100)
+
+        # 更换背景图片按钮
+        self.select_background_image_file_btn = QToolButton()
+        self.select_background_image_file_btn.setText('选择背景图片')
+        #self.select_background_image_file_btn.setFixedWidth(150)
 
         # 显示详细聊天部分
         self.show_online_user_btn = QPushButton('查看在线用户')
@@ -259,6 +266,7 @@ class MainWindow(QWidget):
         self.tool_layout.addWidget(self.adjust_font_lab)
         self.tool_layout.addWidget(self.font_smaller_btn)
         self.tool_layout.addWidget(self.font_bigger_btn)
+        self.tool_layout.addWidget(self.select_background_image_file_btn)
         self.tool_widget = QLabel()
         self.tool_widget.setFixedHeight(50)
         self.tool_widget.setLayout(self.tool_layout)
@@ -300,7 +308,7 @@ class MainWindow(QWidget):
         self.nickname_lab.setObjectName('nickname_lab')
 
         # 设置风格
-        self.set_style('/home/bill/Desktop/MAC自带壁纸/1226016,106.jpg')
+        self.set_style('Images/bg.jpg')
 
         # 设置字体
         self.set_QTextBrowser_font_size(self.group_chat, 15)
@@ -316,6 +324,7 @@ class MainWindow(QWidget):
         self.type_select_login.toggled.connect(self.toggle_login)
         self.show_online_user_btn.clicked.connect(self.show_online_user)
         self.select_file_btn.clicked.connect(self.choose_file)
+        self.select_background_image_file_btn.clicked.connect(self.choose_background_image_file)
         self.font_smaller_btn.clicked.connect(self.font_smaller)
         self.font_bigger_btn.clicked.connect(self.font_bigger)
         self.send_file_btn.clicked.connect(self.send_file)
@@ -367,13 +376,21 @@ class MainWindow(QWidget):
         font.setWeight(75)
         QTextBrowser.setFont(font)
 
+    # 当前QTextBrowser中字体变小
     def font_smaller(self):
         self.font_size -= 1
         self.set_QTextBrowser_font_size(self.tabView.currentWidget(), self.font_size)
 
+    # # 当前QTextBrowser中字体变大
     def font_bigger(self):
         self.font_size += 1
         self.set_QTextBrowser_font_size(self.tabView.currentWidget(), self.font_size)
+
+    # 选择背景图片
+    def choose_background_image_file(self):
+        path = QFileDialog.getOpenFileName()
+        if path[0] != '':
+            self.set_style(path[0])
 
     def set_style(self, background_img_name="Images/bg"):
         self.setStyleSheet(
@@ -476,13 +493,42 @@ class MainWindow(QWidget):
 
     # 发送文件/图片
     def send_file(self):
+
+        def is_image_file(filepath):
+            return filepath.endswith("png") or filepath.endswith("jpg") or filepath.endswith("jpeg") or filepath.endswith("gif")
+
         filepath = self.file_line_edit.text()
+        # 获取widget的名称
+        currentWidgetName = self.tabView.currentWidget().objectName()
+
         if os.path.isfile(filepath):
             print "发送文件/图片:", filepath
-            if filepath.endswith("png") or filepath.endswith("jpg") or filepath.endswith("jpeg") or filepath.endswith("gif"):
-                self.client.send_file(filepath, "image")
+            # 群聊
+            if currentWidgetName == 'group_chat':
+                if is_image_file(filepath):
+                    self.client.send_file(filepath, "image")
+                    jdata = {"store_filename": filepath, "nickname": u"自己"}
+                    self.add_format_image_to_QTextBrowser(jdata, self.group_chat)
+                else:
+                    self.client.send_file(filepath)
+                    jdata = {"content": u"成功发送文件\n", "nickname": u"自己"}
+                    self.add_format_text_to_QTextBrowser(jdata, self.group_chat)
+            # P2P聊
             else:
-                self.client.send_file(filepath)
+                objs = P2P_chat_manager.P2P_chat_objects
+                for secret_id in objs:
+                    # print objs[secret_id]
+                    if secret_id == currentWidgetName:
+                        sender_client = objs[secret_id].get('sender')
+                        chat_tab = objs[secret_id].get('chat_tab')
+                        if is_image_file(filepath):
+                            jdata = {"store_filename": filepath, "nickname": u"自己"}
+                            self.add_format_image_to_QTextBrowser(jdata, chat_tab)
+                            sender_client.send_file(filepath, "image")
+                        else:
+                            jdata = {"content": u"成功发送文件\n", "nickname": u"自己"}
+                            self.add_format_text_to_QTextBrowser(jdata, chat_tab)
+                            sender_client.send_file(filepath)
             self.file_line_edit.setText("")
 
     # 检测回车，检测到就发送
@@ -532,6 +578,7 @@ class MainWindow(QWidget):
             assert self.client.login(username, password)
             assert self.recv_client.login(username, password)
             if self.client.nickname:
+                self.nickname = self.client.nickname
                 self.setWindowTitle(u"MINET - 用户" + self.client.nickname)
             QMessageBox.information(
                 self,
@@ -595,8 +642,10 @@ class MainWindow(QWidget):
         store_filename = jdata.get("store_filename")
         msg_head = "%s %s\n" % (nickname, time)
         QTextBrowserObject.insertPlainText(msg_head)
+        QTextBrowserObject.moveCursor(QTextBrowserObject.textCursor().End)
         QTextBrowserObject.insertHtml('<img src="%s"></img>' % store_filename)
-        QTextBrowserObject.insertPlainText("\n")
+        QTextBrowserObject.moveCursor(QTextBrowserObject.textCursor().End)
+        QTextBrowserObject.insertPlainText("\n\n")
         QTextBrowserObject.moveCursor(QTextBrowserObject.textCursor().End)
 
     # 在tabview中关闭这个tab（会话结束）
