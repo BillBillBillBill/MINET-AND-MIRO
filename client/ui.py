@@ -1,19 +1,15 @@
 #coding:utf-8
-import re
-import platform
-import json
+import ConfigParser
 
-from PyQt5.QtGui import QKeyEvent
 from PyQt5.QtWidgets import (
-    QApplication, QMessageBox, QFileDialog, QWidget, QDialog,
-    QLabel, QLineEdit, QTextEdit, QRadioButton, QToolButton, QPushButton, QTextBrowser,
-    QButtonGroup, QFrame, QListWidget, QListWidgetItem, QTabWidget,
+    QApplication, QMessageBox, QWidget, QDialog, QLabel, QLineEdit,
+    QTextEdit, QRadioButton, QPushButton, QTextBrowser,QTabWidget,
     QHBoxLayout, QVBoxLayout, QGridLayout, QTableWidget, QTableWidgetItem)
 
-from PyQt5.QtCore import *
+#from PyQt5.QtCore import *
+from PyQt5.QtCore import pyqtSignal, Qt, QTranslator
 from threading import Thread
 from Queue import Queue
-from time import sleep
 from datetime import datetime
 from client import TcpClient, start_P2P_chat_TCP_server, isPortOpen, P2PChatClient, P2P_chat_manager
 
@@ -397,9 +393,12 @@ class MainWindow(QWidget):
         # self.login_layout_widgets = [self.login_btn_fram, self.login_input_fram]
 
         # 启动p2p聊天服务器
+        # 从配置文件中读取host, port
+        cf = ConfigParser.ConfigParser()
+        cf.read("server.conf")
+        self.self_p2p_server_host = cf.get("P2P_server", "host")
+        self.self_p2p_server_port = cf.getint("P2P_server", "port")
         # 寻找可用端口
-        self.self_p2p_server_host = "localhost"
-        self.self_p2p_server_port = 54321
         while isPortOpen(self.self_p2p_server_port):
             self.self_p2p_server_port += 1
         self.P2P_chat_TCP_server_thread = Thread(target=start_P2P_chat_TCP_server, args=(self.self_p2p_server_host,self.self_p2p_server_port,self))

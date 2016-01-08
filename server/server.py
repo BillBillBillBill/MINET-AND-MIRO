@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding:utf-8 -*-
-#
 
+import ConfigParser
 import socket
 import threading
 import SocketServer
@@ -274,15 +274,14 @@ class ThreadedTCPServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
     pass
 
 # 启动服务器
-def start_MIRO():
+def start_MIRO(host="localhost", port=12345):
     # Port 0 means to select an arbitrary unused port
-    HOST = "localhost"
-    PORT = 12345
+
     # 寻找可用端口
-    while isPortOpen(PORT):
-        PORT += 1
+    while isPortOpen(port):
+        port += 1
     BUFSIZ = 1024
-    ADDR = (HOST, PORT)
+    ADDR = (host, port)
 
     SocketServer.TCPServer.allow_reuse_address = True
     server = ThreadedTCPServer(ADDR, ThreadedTCPRequestHandler)
@@ -293,11 +292,16 @@ def start_MIRO():
     # Exit the server thread when the main thread terminates
     server_thread.daemon = True
 
-    print u"MIRO 开启，监听端口：", PORT
+    print u"MIRO 开启，监听端口：", port
     server_thread.start()
     # Activate the server; this will keep running until you
     # interrupt the program with Ctrl-C
     server.serve_forever()
 
 if __name__ == "__main__":
-    start_MIRO()
+    # 从配置文件中读取host, port
+    cf = ConfigParser.ConfigParser()
+    cf.read("server.conf")
+    host = cf.get("server", "host")
+    port = cf.getint("server", "port")
+    start_MIRO(host, port)

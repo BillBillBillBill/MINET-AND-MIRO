@@ -1,16 +1,13 @@
 #!/usr/bin/env python
 #coding:utf-8
-
+import ConfigParser
 import socket
 import json
-import time
 
 import threading
 import SocketServer
 import traceback
 import uuid
-
-from PyQt5.QtWidgets import QTextBrowser
 
 
 # 检测端口是否被占用
@@ -30,12 +27,18 @@ def generate_secrect_id():
 
 
 class TcpClient:
-    HOST = "localhost"
-    PORT = 12345
+
     BUFSIZ = 1024
-    ADDR = (HOST, PORT)
 
     def __init__(self, UI=None, is_recv_boardcast=False):
+
+        # 从配置文件中读取host, port
+        cf = ConfigParser.ConfigParser()
+        cf.read("server.conf")
+        host = cf.get("server", "host")
+        port = cf.getint("server", "port")
+        ADDR = (host, port)
+
         self.isMIRO = False
         self.isLogin = False
         self.nickname = None
@@ -43,7 +46,7 @@ class TcpClient:
         self.is_recv_boardcast = is_recv_boardcast
         self.jdata = {}
         self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.client.connect(self.ADDR)
+        self.client.connect(ADDR)
         # print self.client.getpeername()
         # print self.client.getsockname()
         # self.handshake()
