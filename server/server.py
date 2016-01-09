@@ -10,7 +10,9 @@ import functools
 import time
 import traceback
 from conn import r
-
+import sys
+reload(sys)
+sys.setdefaultencoding('utf8')
 
 # 检测端口是否被占用
 def isPortOpen(host, port):

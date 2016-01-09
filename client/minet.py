@@ -14,7 +14,9 @@ from threading import Thread
 from Queue import Queue
 from datetime import datetime
 from client import TcpClient, start_P2P_chat_TCP_server, isPortOpen, P2PChatClient, P2P_chat_manager
-
+import sys
+reload(sys)
+sys.setdefaultencoding('utf8')
 
 class UserDataBox(QWidget):
 
@@ -145,15 +147,15 @@ class MainWindow(QWidget):
     addTab_to_tabView_signal = pyqtSignal(dict)
 
     def closeEvent(self, QCloseEvent):
-        print u"程序退出"
+        #print u"程序退出"
         self.__thread_killer = True
         self.client.finish()
-        print u"关闭client"
+        #print u"关闭client"
         self.recv_client.finish()
-        print u"关闭recv_client"
+        #print u"关闭recv_client"
         for secret_id in P2P_chat_manager.P2P_chat_objects:
             P2P_chat_manager.P2P_chat_objects[secret_id]['client'].finish()
-        print u"关闭p2p chat client"
+        #print u"关闭p2p chat client"
 
     def __init__(self, parent=None):
         super(MainWindow, self).__init__(parent)
@@ -502,7 +504,7 @@ class MainWindow(QWidget):
         currentWidgetName = self.tabView.currentWidget().objectName()
 
         if os.path.isfile(filepath):
-            print u"发送文件/图片:", filepath
+            #print u"发送文件/图片:", filepath
             # 群聊
             if currentWidgetName == 'group_chat':
                 if is_image_file(filepath):
@@ -517,7 +519,7 @@ class MainWindow(QWidget):
             else:
                 objs = P2P_chat_manager.P2P_chat_objects
                 for secret_id in objs:
-                    # print objs[secret_id]
+                    # #print objs[secret_id]
                     if secret_id == currentWidgetName:
                         sender_client = objs[secret_id].get('sender')
                         chat_tab = objs[secret_id].get('chat_tab')
@@ -534,7 +536,7 @@ class MainWindow(QWidget):
     # 检测回车，检测到就发送
     def detect_return(self):
         content = self.chat_msg_edit.toPlainText()
-        # print "%r" % content
+        # #print "%r" % content
         if content.endswith('\n'):
             self.send_msg_btn.click()
 
@@ -557,12 +559,12 @@ class MainWindow(QWidget):
         # 查询在线用户
         try:
             online_user_list = self.client.get_online_user()
-            print online_user_list
+            #print online_user_list
             # 显示新窗口
             self.tableViewWindow = UserDataBox(online_user_list=online_user_list, main_window=self)
             self.tableViewWindow.show()
         except Exception, e:
-            print e
+            #print e
             QMessageBox.warning(
                 self,
                 "提示",
@@ -572,8 +574,8 @@ class MainWindow(QWidget):
     def login(self):
         username = self.username_edit.text()
         password = self.password_edit.text()
-        # print "username:"+username
-        # print "password:"+password
+        # #print "username:"+username
+        # #print "password:"+password
         try:
             assert self.client.login(username, password)
             assert self.recv_client.login(username, password)
@@ -594,7 +596,7 @@ class MainWindow(QWidget):
                 self.resize(500, 300)
             self.start_recv_msg()
         except Exception, e:
-            print e
+            #print e
             QMessageBox.warning(
                 self,
                 "提示",
@@ -605,9 +607,9 @@ class MainWindow(QWidget):
         username = self.username_edit.text()
         password = self.password_edit.text()
         nickname = self.nickname_edit.text()
-        # print "username:"+username
-        # print "password:"+password
-        # print "nickname:"+nickname
+        # #print "username:"+username
+        # #print "password:"+password
+        # #print "nickname:"+nickname
         try:
             assert self.client.register(username, password, nickname)
             QMessageBox.information(
@@ -618,7 +620,7 @@ class MainWindow(QWidget):
             # 转到登录页
             self.type_select_login.click()
         except Exception, e:
-            print e
+            #print e
             QMessageBox.warning(
                 self,
                 "提示",
@@ -630,7 +632,7 @@ class MainWindow(QWidget):
         time = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
         text = jdata.get("content", "")
         nickname = jdata.get("nickname", "")
-        msg = u"%s %s\n%s\n" % (nickname, time, text)
+        msg = u"%s %s\n%s\n" % (nickname.encode("utf-8"), time.encode("utf-8"), text.encode("utf-8"))
         QTextBrowserObject.insertPlainText(msg)
         # QTextBrowserObject.setText("%s%s"%(QTextBrowserObject.toPlainText(), msg))
         QTextBrowserObject.moveCursor(QTextBrowserObject.textCursor().End)
@@ -640,7 +642,7 @@ class MainWindow(QWidget):
         time = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
         nickname = jdata.get("nickname", "")
         store_filename = jdata.get("store_filename")
-        msg_head = u"%s %s\n" % (nickname, time)
+        msg_head = u"%s %s\n" % (nickname.encode("utf-8"), time.encode("utf-8"))
         QTextBrowserObject.insertPlainText(msg_head)
         QTextBrowserObject.moveCursor(QTextBrowserObject.textCursor().End)
         QTextBrowserObject.insertHtml('<img src="%s"></img>' % store_filename)
@@ -694,7 +696,7 @@ class MainWindow(QWidget):
     def send_msg(self):
         # 获取widget的名称
         currentWidgetName = self.tabView.currentWidget().objectName()
-        print u"currentWidgetName:", currentWidgetName
+        #print u"currentWidgetName:", currentWidgetName
         raw_content = self.chat_msg_edit.toPlainText()
         # 内容后面统一换行
         if not raw_content.endswith('\n'):
@@ -708,7 +710,7 @@ class MainWindow(QWidget):
                 jdata = {"content": raw_content, "nickname": u"自己"}
                 self.add_format_text_to_QTextBrowser(jdata, self.group_chat)
             except Exception, e:
-                print "send_msg:", e
+                #print "send_msg:", e
                 QMessageBox.warning(
                     self,
                     "提示",
@@ -719,12 +721,12 @@ class MainWindow(QWidget):
                 jdata = {"content": raw_content, "nickname": u"自己"}
                 objs = P2P_chat_manager.P2P_chat_objects
                 for secret_id in objs:
-                    # print objs[secret_id]
+                    # #print objs[secret_id]
                     if secret_id == currentWidgetName:
                         self.add_format_text_to_QTextBrowser(jdata, objs[secret_id].get('chat_tab'))
                         objs[secret_id].get('sender').chat(content)
             except Exception, e:
-                print "send_msg:", e
+                #print "send_msg:", e
                 QMessageBox.warning(
                     self,
                     "提示",
@@ -735,14 +737,14 @@ class MainWindow(QWidget):
         def start():
             while True:
                 if self.__thread_killer:
-                    print u"停止接收信息"
+                    #print u"停止接收信息"
                     return True
                 jdata = self.recv_client.receive_one_msg()
                 # 收到广播消息
                 if jdata.get("action") == "broadcast":
                     #self.add_format_text_to_group_chat(jdata['content'])
                     self.add_format_text_to_QTextBrowser_signal.emit(jdata, self.group_chat)
-                    print u"%s发来消息:%s" % (jdata['nickname'], jdata['content'])
+                    #print u"%s发来消息:%s" % (jdata['nickname'], jdata['content'])
                 # 收到文件广播
                 if jdata.get("action") == "broadcast_file":
                     # 开始接收文件
@@ -750,10 +752,10 @@ class MainWindow(QWidget):
                     jdata['store_filename'] = store_filename
                     # 如果是图片 显示出来
                     if jdata.get("file_type") == 'image':
-                        print u"接收到图片"
+                        #print u"接收到图片"
                         self.add_format_image_to_QTextBrowser_signal.emit(jdata, self.group_chat)
                     else:
-                        print u"接收到文件"
+                        #print u"接收到文件"
                         jdata['content'] = u"已接收%s发来的文件，保存路径为:%s\n" % (jdata['nickname'], store_filename)
                         jdata['nickname'] = u"【系统消息】"
                         self.add_format_text_to_QTextBrowser_signal.emit(jdata, self.group_chat)

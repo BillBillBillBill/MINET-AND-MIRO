@@ -7,13 +7,13 @@ import json
 
 import threading
 import SocketServer
-import traceback
 import uuid
-
+import sys
+reload(sys)
+sys.setdefaultencoding('utf8')
 
 # 检测端口是否被占用
 import time
-
 
 def isPortOpen(host, port):
     import telnetlib
@@ -51,8 +51,8 @@ class TcpClient:
         self.jdata = {}
         self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.client.connect(ADDR)
-        # print self.client.getpeername()
-        # print self.client.getsockname()
+        # #print self.client.getpeername()
+        # #print self.client.getsockname()
         # self.handshake()
         self.allow_action = ["handshake", "register", "login", "logout", "broadcast", "get_online_user"]
 
@@ -68,21 +68,21 @@ class TcpClient:
         ack_msg = json.dumps(ack_msg)
         self.send_json_and_recv(ack_msg)
         if self.jdata.get("server") != "MIRO":
-            print "Server is not MIRO"
+            #print "Server is not MIRO"
             self.client.close()
         else:
             self.isMIRO = True
-            print "Connect to MIRO"
+            #print "Connect to MIRO"
 
     def register(self, username, password, nickname):
         register_msg = '{"action": "register", "username": "%s", "password": "%s", "nickname": "%s"}'\
                        % (username, password, nickname)
         self.send_json_and_recv(register_msg)
         if self.jdata.get("code") == "REGISTER_SUCCESS":
-            print "Register success"
+            #print "Register success"
             return True
         else:
-            print "Register fail, reason:", self.jdata.get("message")
+            #print "Register fail, reason:", self.jdata.get("message")
             return False
 
     def login(self, username, password):
@@ -90,27 +90,27 @@ class TcpClient:
         self.send_json_and_recv(register_msg)
         if self.jdata.get("code") == "LOGIN_SUCCESS":
             self.isLogin = True
-            print "Login success"
+            #print "Login success"
             if self.jdata.get("nickname"):
                 self.nickname = self.jdata.get("nickname")
             return True
         else:
-            print "Login fail, reason:", self.jdata.get("message")
+            #print "Login fail, reason:", self.jdata.get("message")
             return False
 
     def logout(self):
         logout_msg = '{"action": "logout"}'
         self.send_json_and_recv(logout_msg)
         self.isLogin = False
-        if self.jdata.get("code") == "LOGOUT_SUCCESS":
-            print "Logout success"
-        else:
-            print "Logout fail:", self.jdata.get("message")
+        # if self.jdata.get("code") == "LOGOUT_SUCCESS":
+        #     #print "Logout success"
+        # else:
+            #print "Logout fail:", self.jdata.get("message")
 
     def send_file(self, filename, file_type="file"):
         get_msg = u'{"action": "send_file", "filename": "%s", "file_type": "%s"}' % (filename.split("/")[-1], file_type)
         self.send_json(get_msg)
-        print "开始发送文件.."
+        #print "开始发送文件.."
         with open(filename, 'rb') as f:
             while True:
                 data = f.read(4096)
@@ -120,7 +120,7 @@ class TcpClient:
             f.close()
             time.sleep(0.5)
             self.client.sendall('EOF')
-            print "发送文件完成"
+            #print "发送文件完成"
 
     def recv_file(self, filename, file_type="file"):
         if not os.path.isdir(self.nickname):
@@ -133,12 +133,12 @@ class TcpClient:
             store_filename = user_image_dir + filename
         else:
             store_filename = user_file_dir + filename
-        print "开始接收文件"
+        #print "开始接收文件"
         with open(store_filename, 'wb') as f:
             while True:
                 data = self.client.recv(4096)
                 if data == 'EOF':
-                    print "接收文件完成"
+                    #print "接收文件完成"
                     break
                 f.write(data)
             f.close()
@@ -148,11 +148,11 @@ class TcpClient:
         broadcast_msg = '{"action": "broadcast", "content": "%s"}' % content
         try:
             self.send_json(broadcast_msg.encode('utf-8'))
-            print "Broadcast success"
+            #print "Broadcast success"
             return True
         except Exception, e:
-            print e
-            print "Broadcast fail, reason:", self.jdata.get("message")
+            #print e
+            #print "Broadcast fail, reason:", self.jdata.get("message")
             return False
 
     def get_online_user(self):
@@ -172,7 +172,7 @@ class TcpClient:
                 break
 
             if action not in self.allow_action:
-                print "action not allowed"
+                #print "action not allowed"
                 continue
 
             if action == "broadcast":
@@ -202,15 +202,15 @@ class TcpClient:
             # data = self.client.recv(self.BUFSIZ)
             # if not data:
             #     break
-            # print data.decode('utf8')
+            # #print data.decode('utf8')
 
     def receive_one_msg(self):
         """
         接收一条信息 并返回
         """
         data = self.client.recv(self.BUFSIZ)
-        print u"收到信息：", data
-        self.jdata = json.loads(data)
+        #print u"收到信息：", data
+        self.jdata = json.loads(data.encode("utf-8"))
         return self.jdata
 
     def send_json(self, message):
@@ -218,20 +218,22 @@ class TcpClient:
         发送信息
         """
         try:
-            print u"Send: {}".format(message)
+            #print u"Send: {}".format(message)
             self.client.sendall(message.encode("utf-8"))
         except Exception as e:
-            print "send_json:", e
+            pass
+            #print "send_json:", e
 
     def send_json_and_recv(self, message):
         try:
-            #  print "Send: {}".format(message)
+            #  #print "Send: {}".format(message)
             self.client.sendall(message.encode("utf-8"))
             response = self.client.recv(self.BUFSIZ)
-            self.jdata = json.loads(response)
-            print "Recv: ", self.jdata
+            self.jdata = json.loads(response.encode("utf-8"))
+            #print "Recv: ", self.jdata
         except Exception as e:
-            print "send_json_and_recv:", e
+            pass
+            #print "send_json_and_recv:", e
 
     def finish(self):
         if self.isLogin and not self.is_recv_boardcast:
@@ -307,14 +309,16 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
                     # 根据请求由不同handler处理
                     self.handle_action(action_type)
                 except Exception as e:
-                    print "Error:{} / Receive data:{} / traceback:{}".format(e.message, data, traceback.format_exc())
+                    pass
+                    #print "Error:{} / Receive data:{} / traceback:{}".format(e.message, data, traceback.format_exc())
 
         except Exception as e:
-            print "Error:{} / traceback:{}".format(e.message, traceback.format_exc())
+            pass
+            #print "Error:{} / traceback:{}".format(e.message, traceback.format_exc())
 
     # 根据不同action交给不同的handler处理
     def handle_action(self, action_type):
-        print "Receive action:[%s]" % action_type
+        #print "Receive action:[%s]" % action_type
 
         if action_type not in self.allow_action.keys():
             self.request.sendall(json.dumps({"code": "UNKNOWN_METHOD", "message": "The action is unknown"}))
@@ -338,12 +342,12 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
             store_filename = user_image_dir + filename
         else:
             store_filename = user_file_dir + filename
-        print u"开始接收图片/文件"
+        #print u"开始接收图片/文件"
         with open(store_filename, 'wb') as f:
             while True:
                 data = self.request.recv(4096)
                 if data == 'EOF':
-                    print u"接收图片/文件完成"
+                    #print u"接收图片/文件完成"
                     P2P_chat_object = P2P_chat_manager.P2P_chat_objects.get(secret_id)
                     if P2P_chat_object:
                         QTextBrowserObject = P2P_chat_object.get("chat_tab")
@@ -357,14 +361,15 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
                             }
                             P2P_chat_manager.main_window.add_format_text_to_QTextBrowser_signal.emit(jdata, QTextBrowserObject)
                     else:
-                        print u"找不到该聊天"
+                        pass
+                        #print u"找不到该聊天"
                     break
                 f.write(data)
             f.close()
 
     # 握手
     def handshake_handler(self):
-        print u"开始建立连接"
+        #print u"开始建立连接"
         host = self.jdata.get("host")
         port = self.jdata.get("port")
         nickname = self.jdata.get("nickname")
@@ -376,10 +381,10 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
                 if not P2P_chat_manager.P2P_chat_objects.get(secret_id):
                     # 建立对话
                     P2P_chat_manager.main_window.addTab_to_tabView_signal.emit(self.jdata)
-                    print u"建立连接完成"
+                    #print u"建立连接完成"
                 self.request.sendall(json.dumps({"message": "success"}))
             except Exception, e:
-                print e
+                #print e
                 self.request.sendall(json.dumps({"message": "fail"}))
 
     # 收取信息并显示
@@ -392,10 +397,11 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
             jdata = {"content": content.encode('utf-8'), "nickname": u"【系统消息】" if self.jdata.get("special") else P2P_chat_object.get("nickname")}
             P2P_chat_manager.main_window.add_format_text_to_QTextBrowser_signal.emit(jdata, QTextBrowserObject)
             if self.jdata.get("special") == "quit":
-                print u"断开连接，关闭标签"
+                #print u"断开连接，关闭标签"
                 P2P_chat_manager.main_window.close_QTextBrowser_signal.emit(secret_id, QTextBrowserObject)
         else:
-            print u"找不到该聊天"
+            pass
+            #print u"找不到该聊天"
 
 class ThreadedTCPServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
     pass
@@ -405,7 +411,7 @@ def start_P2P_chat_TCP_server(HOST="localhost", PORT=54321, UI=None):
 
     ADDR = (HOST, PORT)
 
-    print "start P2P chat server at port:", PORT
+    #print "start P2P chat server at port:", PORT
 
     SocketServer.TCPServer.allow_reuse_address = True
     server = ThreadedTCPServer(ADDR, ThreadedTCPRequestHandler)
@@ -440,27 +446,28 @@ class P2PChatClient:
         handshake_msg = u'{"action": "handshake", "host": "%s", "port": "%s", "nickname": "%s", "secret_id": "%s"}' % (self_host, self_port, self.self_nickname, self.secret_id)
         self.send_json_and_recv(handshake_msg)
         if self.jdata.get("message") != "success":
-            print "Handshake fail"
+            #print "Handshake fail"
             self.client.close()
         else:
-            print "Handshake success"
+            pass
+            #print "Handshake success"
 
     def chat(self, content=""):
         broadcast_msg = u'{"action": "chat", "content": "%s", "secret_id": "%s"}' % (content, self.secret_id)
         try:
             self.send_json(broadcast_msg)
-            print "Send message success"
+            #print "Send message success"
             return True
         except Exception, e:
-            print e
-            print "Send message fail, reason:", self.jdata.get("message")
+            #print e
+            #print "Send message fail, reason:", self.jdata.get("message")
             return False
 
     def send_file(self, filename, file_type="file"):
         get_msg = u'{"action": "send_file", "filename": "%s", "file_type": "%s", "secret_id": "%s"}' % (filename.split("/")[-1], file_type, self.secret_id)
         self.send_json(get_msg)
         time.sleep(0.2)
-        print u"开始发送文件.."
+        #print u"开始发送文件.."
         with open(filename, 'rb') as f:
             while True:
                 data = f.read(4096)
@@ -470,27 +477,29 @@ class P2PChatClient:
             f.close()
             time.sleep(0.2)
             self.client.sendall('EOF')
-            print u"发送文件完成"
+            #print u"发送文件完成"
 
     def send_json(self, message):
         """
         发送信息
         """
         try:
-            print u"Send: {}".format(message)
+            #print u"Send: {}".format(message)
             self.client.sendall(message.encode("utf-8"))
         except Exception as e:
-            print "send_json:", e
+            pass
+            #print "send_json:", e
 
     def send_json_and_recv(self, message):
         try:
-            #  print "Send: {}".format(message)
+            #  #print "Send: {}".format(message)
             self.client.sendall(message.encode("utf-8"))
             response = self.client.recv(1024)
             self.jdata = json.loads(response)
-            print "Recv: ", self.jdata
+            #print "Recv: ", self.jdata
         except Exception as e:
-            print "send_json_and_recv:", e
+            pass
+            #print "send_json_and_recv:", e
 
     def finish(self):
         # 断开连接
