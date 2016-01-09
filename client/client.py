@@ -108,7 +108,7 @@ class TcpClient:
             print "Logout fail:", self.jdata.get("message")
 
     def send_file(self, filename, file_type="file"):
-        get_msg = '{"action": "send_file", "filename": "%s", "file_type": "%s"}' % (filename.split("/")[-1], file_type)
+        get_msg = u'{"action": "send_file", "filename": "%s", "file_type": "%s"}' % (filename.split("/")[-1], file_type)
         self.send_json(get_msg)
         print "开始发送文件.."
         with open(filename, 'rb') as f:
@@ -147,7 +147,7 @@ class TcpClient:
     def broadcast(self, content=""):
         broadcast_msg = '{"action": "broadcast", "content": "%s"}' % content
         try:
-            self.send_json(broadcast_msg)
+            self.send_json(broadcast_msg.encode('utf-8'))
             print "Broadcast success"
             return True
         except Exception, e:
@@ -157,7 +157,7 @@ class TcpClient:
 
     def get_online_user(self):
         get_msg = '{"action": "get_online_user"}'
-        self.send_json_and_recv(get_msg)
+        self.send_json_and_recv(get_msg.encode('utf-8'))
         # 防黏包
         # if isinstance(self.jdata, dict):
         #     self.receive_one_msg()
@@ -209,7 +209,7 @@ class TcpClient:
         接收一条信息 并返回
         """
         data = self.client.recv(self.BUFSIZ)
-        print "收到信息：", data
+        print u"收到信息：", data
         self.jdata = json.loads(data)
         return self.jdata
 
@@ -338,12 +338,12 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
             store_filename = user_image_dir + filename
         else:
             store_filename = user_file_dir + filename
-        print "开始接收图片/文件"
+        print u"开始接收图片/文件"
         with open(store_filename, 'wb') as f:
             while True:
                 data = self.request.recv(4096)
                 if data == 'EOF':
-                    print "接收图片/文件完成"
+                    print u"接收图片/文件完成"
                     P2P_chat_object = P2P_chat_manager.P2P_chat_objects.get(secret_id)
                     if P2P_chat_object:
                         QTextBrowserObject = P2P_chat_object.get("chat_tab")
@@ -376,7 +376,7 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
                 if not P2P_chat_manager.P2P_chat_objects.get(secret_id):
                     # 建立对话
                     P2P_chat_manager.main_window.addTab_to_tabView_signal.emit(self.jdata)
-                    print "建立连接完成"
+                    print u"建立连接完成"
                 self.request.sendall(json.dumps({"message": "success"}))
             except Exception, e:
                 print e
@@ -389,10 +389,10 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
         P2P_chat_object = P2P_chat_manager.P2P_chat_objects.get(secret_id)
         if P2P_chat_object:
             QTextBrowserObject = P2P_chat_object.get("chat_tab")
-            jdata = {"content": content, "nickname": u"【系统消息】" if self.jdata.get("special") else P2P_chat_object.get("nickname")}
+            jdata = {"content": content.encode('utf-8'), "nickname": u"【系统消息】" if self.jdata.get("special") else P2P_chat_object.get("nickname")}
             P2P_chat_manager.main_window.add_format_text_to_QTextBrowser_signal.emit(jdata, QTextBrowserObject)
             if self.jdata.get("special") == "quit":
-                print "断开连接，关闭标签"
+                print u"断开连接，关闭标签"
                 P2P_chat_manager.main_window.close_QTextBrowser_signal.emit(secret_id, QTextBrowserObject)
         else:
             print u"找不到该聊天"
@@ -446,7 +446,7 @@ class P2PChatClient:
             print "Handshake success"
 
     def chat(self, content=""):
-        broadcast_msg = '{"action": "chat", "content": "%s", "secret_id": "%s"}' % (content, self.secret_id)
+        broadcast_msg = u'{"action": "chat", "content": "%s", "secret_id": "%s"}' % (content, self.secret_id)
         try:
             self.send_json(broadcast_msg)
             print "Send message success"
@@ -457,10 +457,10 @@ class P2PChatClient:
             return False
 
     def send_file(self, filename, file_type="file"):
-        get_msg = '{"action": "send_file", "filename": "%s", "file_type": "%s", "secret_id": "%s"}' % (filename.split("/")[-1], file_type, self.secret_id)
+        get_msg = u'{"action": "send_file", "filename": "%s", "file_type": "%s", "secret_id": "%s"}' % (filename.split("/")[-1], file_type, self.secret_id)
         self.send_json(get_msg)
-        time.sleep(0.1)
-        print "开始发送文件.."
+        time.sleep(0.2)
+        print u"开始发送文件.."
         with open(filename, 'rb') as f:
             while True:
                 data = f.read(4096)
@@ -468,9 +468,9 @@ class P2PChatClient:
                     break
                 self.client.sendall(data)
             f.close()
-            time.sleep(0.1)
+            time.sleep(0.2)
             self.client.sendall('EOF')
-            print "发送文件完成"
+            print u"发送文件完成"
 
     def send_json(self, message):
         """

@@ -170,8 +170,8 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
             if conn.get_user() != self.user:
                 print "向{}发送消息".format(conn.get_user())
                 conn.request.sendall(json.dumps(broadcast_msg))
-                time.sleep(0.1)
-                print "开始发送文件.."
+                time.sleep(0.2)
+                print u"开始发送文件.."
                 # 向所有在线用户发送该文件
                 with open(store_filepath, 'rb') as f:
                     while True:
@@ -180,9 +180,9 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
                             break
                         conn.request.sendall(data)
                     f.close()
-                    time.sleep(0.1)
+                    time.sleep(0.2)
                     conn.request.sendall('EOF')
-                    print "发送文件完成"
+                    print u"发送文件完成"
 
     # 根据不同action交给不同的handler处理
     def handle_action(self, action_type):

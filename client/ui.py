@@ -148,12 +148,12 @@ class MainWindow(QWidget):
         print u"程序退出"
         self.__thread_killer = True
         self.client.finish()
-        print "关闭client"
+        print u"关闭client"
         self.recv_client.finish()
-        print "关闭recv_client"
+        print u"关闭recv_client"
         for secret_id in P2P_chat_manager.P2P_chat_objects:
             P2P_chat_manager.P2P_chat_objects[secret_id]['client'].finish()
-        print "关闭p2p chat client"
+        print u"关闭p2p chat client"
 
     def __init__(self, parent=None):
         super(MainWindow, self).__init__(parent)
@@ -502,7 +502,7 @@ class MainWindow(QWidget):
         currentWidgetName = self.tabView.currentWidget().objectName()
 
         if os.path.isfile(filepath):
-            print "发送文件/图片:", filepath
+            print u"发送文件/图片:", filepath
             # 群聊
             if currentWidgetName == 'group_chat':
                 if is_image_file(filepath):
@@ -630,7 +630,7 @@ class MainWindow(QWidget):
         time = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
         text = jdata.get("content", "")
         nickname = jdata.get("nickname", "")
-        msg = "%s %s\n%s\n" % (nickname, time, text)
+        msg = u"%s %s\n%s\n" % (nickname, time, text)
         QTextBrowserObject.insertPlainText(msg)
         # QTextBrowserObject.setText("%s%s"%(QTextBrowserObject.toPlainText(), msg))
         QTextBrowserObject.moveCursor(QTextBrowserObject.textCursor().End)
@@ -640,7 +640,7 @@ class MainWindow(QWidget):
         time = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
         nickname = jdata.get("nickname", "")
         store_filename = jdata.get("store_filename")
-        msg_head = "%s %s\n" % (nickname, time)
+        msg_head = u"%s %s\n" % (nickname, time)
         QTextBrowserObject.insertPlainText(msg_head)
         QTextBrowserObject.moveCursor(QTextBrowserObject.textCursor().End)
         QTextBrowserObject.insertHtml('<img src="%s"></img>' % store_filename)
@@ -694,7 +694,7 @@ class MainWindow(QWidget):
     def send_msg(self):
         # 获取widget的名称
         currentWidgetName = self.tabView.currentWidget().objectName()
-        print "currentWidgetName:", currentWidgetName
+        print u"currentWidgetName:", currentWidgetName
         raw_content = self.chat_msg_edit.toPlainText()
         # 内容后面统一换行
         if not raw_content.endswith('\n'):
@@ -735,14 +735,14 @@ class MainWindow(QWidget):
         def start():
             while True:
                 if self.__thread_killer:
-                    print "停止接收信息"
+                    print u"停止接收信息"
                     return True
                 jdata = self.recv_client.receive_one_msg()
                 # 收到广播消息
                 if jdata.get("action") == "broadcast":
                     #self.add_format_text_to_group_chat(jdata['content'])
                     self.add_format_text_to_QTextBrowser_signal.emit(jdata, self.group_chat)
-                    print jdata['nickname'], "发来消息:", jdata['content']
+                    print u"%s发来消息:%s" % (jdata['nickname'], jdata['content'])
                 # 收到文件广播
                 if jdata.get("action") == "broadcast_file":
                     # 开始接收文件
@@ -750,10 +750,10 @@ class MainWindow(QWidget):
                     jdata['store_filename'] = store_filename
                     # 如果是图片 显示出来
                     if jdata.get("file_type") == 'image':
-                        print "接收到图片"
+                        print u"接收到图片"
                         self.add_format_image_to_QTextBrowser_signal.emit(jdata, self.group_chat)
                     else:
-                        print "接收到文件"
+                        print u"接收到文件"
                         jdata['content'] = u"已接收%s发来的文件，保存路径为:%s\n" % (jdata['nickname'], store_filename)
                         jdata['nickname'] = u"【系统消息】"
                         self.add_format_text_to_QTextBrowser_signal.emit(jdata, self.group_chat)
@@ -767,7 +767,7 @@ class MainWindow(QWidget):
 if __name__ == '__main__':
     import sys
     translator = QTranslator()
-    translator.load('/home/bill/Qt5.5.1/5.5/gcc_64/translations/qt_zh_CN.qm')
+    translator.load('qt_zh_CN.qm')
     app = QApplication(sys.argv)
     app.installTranslator(translator)
     main_window = MainWindow()
